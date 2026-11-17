@@ -16,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -57,11 +58,16 @@ fun LegenDDRRYApp(container: AppContainer) {
                 contentColor = MaterialTheme.colorScheme.onBackground,
             ) {
                 val authState by container.auth.state.collectAsStateWithLifecycle()
+                val session = rememberSessionStoreHolder()
+                // Leaving UNLOCKED (lock, auto-lock) destroys all feature ViewModels of the session.
+                LaunchedEffect(authState) {
+                    if (authState != AuthState.UNLOCKED) session.endSession()
+                }
                 when (authState) {
                     AuthState.LOADING -> AuthLoading()
                     AuthState.NEEDS_SETUP -> SetupScreen(container.auth)
                     AuthState.LOCKED -> UnlockScreen(container.auth)
-                    AuthState.UNLOCKED -> MainShell(container)
+                    AuthState.UNLOCKED -> SessionViewModelScope(session) { MainShell(container) }
                 }
             }
         }
