@@ -1,4 +1,4 @@
-// OWNER: worker "logic". LOCKED API — keep signatures. (Skeleton stub; replace body.)
+// OWNER: worker "logic". LOCKED API — keep signatures.
 package com.legenddrry.feature.vault.generator
 
 import java.security.SecureRandom
@@ -27,15 +27,36 @@ class PasswordGenerator(private val random: SecureRandom = SecureRandom()) {
 
     fun generate(options: GeneratorOptions): String {
         require(options.hasAnyCategory) { "At least one character category must be enabled" }
-        require(options.length in GeneratorOptions.MIN_LENGTH..GeneratorOptions.MAX_LENGTH) { "Length out of range" }
-        // STUB: no category guarantee yet.
-        val pool = buildString {
-            if (options.uppercase) append(UPPERCASE)
-            if (options.lowercase) append(LOWERCASE)
-            if (options.digits) append(DIGITS)
-            if (options.symbols) append(SYMBOLS)
+        require(options.length in GeneratorOptions.MIN_LENGTH..GeneratorOptions.MAX_LENGTH) {
+            "Length must be in ${GeneratorOptions.MIN_LENGTH}..${GeneratorOptions.MAX_LENGTH}, was ${options.length}"
         }
-        return String(CharArray(options.length) { pool[random.nextInt(pool.length)] })
+
+        val sets = enabledSets(options)
+        val pool = sets.joinToString(separator = "")
+        val chars = CharArray(options.length)
+
+        // One guaranteed character from each enabled category...
+        sets.forEachIndexed { i, set -> chars[i] = set[random.nextInt(set.length)] }
+        // ...the rest drawn uniformly from the union pool.
+        for (i in sets.size until chars.size) chars[i] = pool[random.nextInt(pool.length)]
+
+        // Fisher–Yates shuffle so guaranteed characters are not positionally predictable.
+        for (i in chars.size - 1 downTo 1) {
+            val j = random.nextInt(i + 1)
+            val tmp = chars[i]
+            chars[i] = chars[j]
+            chars[j] = tmp
+        }
+        val result = String(chars)
+        chars.fill('\u0000')
+        return result
+    }
+
+    private fun enabledSets(options: GeneratorOptions): List<String> = buildList {
+        if (options.uppercase) add(UPPERCASE)
+        if (options.lowercase) add(LOWERCASE)
+        if (options.digits) add(DIGITS)
+        if (options.symbols) add(SYMBOLS)
     }
 
     companion object {
