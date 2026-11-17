@@ -47,3 +47,6 @@ fun LegenDDRRYToolsTheme(
     // Keep the signature for existing callers; never override the host colour scheme.
     content()
 }
+
+/** Optional host-owned content in Settings; default empty preserves standalone routes. */
+val LocalVaultTransferSection = staticCompositionLocalOf<@Composable () -> Unit> { {} }

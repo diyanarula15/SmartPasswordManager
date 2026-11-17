@@ -46,6 +46,7 @@ import com.legenddrry.feature.tools.components.ToolNotice
 import com.legenddrry.feature.tools.components.ToolPage
 import com.legenddrry.feature.tools.components.ToolSectionTitle
 import com.legenddrry.feature.tools.components.ToolsType
+import com.legenddrry.feature.tools.LocalVaultTransferSection
 import com.legenddrry.feature.tools.contracts.SettingsRepository
 import com.legenddrry.feature.tools.contracts.ThemeMode
 import kotlinx.coroutines.CancellationException
@@ -147,6 +148,7 @@ internal fun SettingsFeature(repository: SettingsRepository) {
                 )
             }
         }
+        LocalVaultTransferSection.current()
         ToolSectionTitle("Application information")
         ToolCard {
             InformationRow("About LegenDDRRY", "A calmer place for your digital life", "info", "about_button") { dialog = "about" }

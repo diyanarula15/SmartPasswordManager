@@ -10,6 +10,10 @@ import com.legenddrry.core.crypto.VaultCrypto
 import com.legenddrry.core.crypto.wipe
 import com.legenddrry.core.storage.VaultFiles
 import com.legenddrry.core.storage.VaultMeta
+import com.legenddrry.core.transfer.ImportPlanner
+import com.legenddrry.core.transfer.VaultImportMode
+import com.legenddrry.core.transfer.VaultImportResult
+import com.legenddrry.core.transfer.VaultTransferStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -23,6 +27,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -45,7 +51,7 @@ internal class EncryptedVault internal constructor(
     private val ioDispatcher: CoroutineDispatcher = Dispatchers.IO,
     private val cpuDispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val clockMs: () -> Long = { System.nanoTime() / 1_000_000L },
-) : AuthManager, VaultRepository {
+) : AuthManager, VaultRepository, VaultTransferStore {
 
     init {
         require(iterations > 0) { "iterations must be positive" }
@@ -257,8 +263,44 @@ internal class EncryptedVault internal constructor(
         if (current.none { it.id == id }) null else current.filterNot { it.id == id }
     }
 
+    // ---------------------------------------------------------------- VaultTransferStore
+
+    override suspend fun snapshotForTransfer(): List<VaultEntry> {
+        currentCoroutineContext().ensureActive()
+        val expectedGeneration = synchronized(sessionLock) {
+            check(dek != null) { "Vault is locked" }
+            generation
+        }
+        return mutex.withLock {
+            currentCoroutineContext().ensureActive()
+            synchronized(sessionLock) {
+                check(dek != null && generation == expectedGeneration) { "Vault is locked" }
+                cache.toList()
+            }
+        }
+    }
+
+    override suspend fun importFromTransfer(entries: List<VaultEntry>, mode: VaultImportMode): VaultImportResult {
+        currentCoroutineContext().ensureActive()
+        val expectedGeneration = synchronized(sessionLock) {
+            check(dek != null) { "Vault is locked" }
+            generation
+        }
+        // Copy before validation/planning so caller-owned mutable lists cannot change mid-commit.
+        val incoming = entries.toList()
+        ImportPlanner.validate(incoming)
+        var result: VaultImportResult? = null
+        mutate(guardSessionForCommit = true, expectedSessionGeneration = expectedGeneration) { current ->
+            val plan = ImportPlanner.plan(current, incoming, mode)
+            result = plan.result
+            if (plan.entries == current) null else plan.entries
+        }
+        return checkNotNull(result)
+    }
+
     /** [transform] returns the new list, or null for a no-op. */
-    private suspend fun mutate(transform: (List<VaultEntry>) -> List<VaultEntry>?) {
+    private suspend fun mutate(guardSessionForCommit: Boolean = false, expectedSessionGeneration: Long? = null, transform: (List<VaultEntry>) -> List<VaultEntry>?) {
+        currentCoroutineContext().ensureActive()
         checkUnlocked()
         mutex.withLock {
             var gen: Long
@@ -266,17 +308,39 @@ internal class EncryptedVault internal constructor(
             var current: List<VaultEntry>
             synchronized(sessionLock) {
                 val d = dek ?: throw IllegalStateException("Vault is locked")
+                if (expectedSessionGeneration != null) check(generation == expectedSessionGeneration) { "Vault is locked" }
                 gen = generation
                 key = d.copyOf() // private copy: lock() may wipe the session key concurrently.
                 current = cache
             }
             try {
-                val updated = transform(current) ?: return
-                withContext(ioDispatcher) { files.writeVault(key, updated) } // persist BEFORE emitting
-                synchronized(sessionLock) {
-                    if (generation == gen && dek != null) {
-                        cache = updated
-                        _entries.tryEmit(updated)
+                val updated = transform(current)
+                if (updated == null) {
+                    currentCoroutineContext().ensureActive()
+                    if (guardSessionForCommit) synchronized(sessionLock) {
+                        check(generation == gen && dek != null) { "Vault is locked" }
+                    }
+                    return
+                }
+                if (guardSessionForCommit) {
+                    withContext(ioDispatcher) {
+                        val context = currentCoroutineContext()
+                        synchronized(sessionLock) {
+                            // lock() cannot interleave this encrypted atomic write and cache publish.
+                            check(generation == gen && dek != null) { "Vault is locked" }
+                            context.ensureActive()
+                            files.writeVault(key, updated)
+                            cache = updated
+                            _entries.tryEmit(updated)
+                        }
+                    }
+                } else {
+                    withContext(ioDispatcher) { files.writeVault(key, updated) } // persist BEFORE emitting
+                    synchronized(sessionLock) {
+                        if (generation == gen && dek != null) {
+                            cache = updated
+                            _entries.tryEmit(updated)
+                        }
                     }
                 }
             } finally {

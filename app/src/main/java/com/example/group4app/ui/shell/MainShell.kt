@@ -33,6 +33,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import com.legenddrry.feature.tools.LocalVaultTransferSection
+import com.example.group4app.backup.VaultTransferSection
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -138,7 +141,11 @@ private fun ShellDestinationContent(
         ShellTab.MORE -> when (destination.subScreen) {
             null -> MoreScreen(onOpen = onOpen, onLockNow = { container.auth.lock() })
             MoreSubScreen.SECURITY -> SubScreen("Security dashboard", onBack) { SecurityRoute() }
-            MoreSubScreen.SETTINGS -> SubScreen("Settings", onBack) { SettingsRoute() }
+            MoreSubScreen.SETTINGS -> SubScreen("Settings", onBack) {
+                CompositionLocalProvider(LocalVaultTransferSection provides { VaultTransferSection(container.core.transfer) }) {
+                    SettingsRoute()
+                }
+            }
             MoreSubScreen.ABOUT -> SubScreen("About", onBack) { AboutScreen() }
         }
     }

@@ -6,6 +6,7 @@ import com.legenddrry.core.auth.AuthManager
 import com.legenddrry.core.crypto.AndroidKeystoreKeyWrapper
 import com.legenddrry.core.vault.EncryptedVault
 import java.io.File
+import com.legenddrry.core.transfer.VaultTransferManager
 
 /**
  * Application-scoped core services. Create ONCE (Application.onCreate) and share the instances.
@@ -20,6 +21,7 @@ import java.io.File
 class CoreContainer private constructor(
     val auth: AuthManager,
     val vaultRepository: VaultRepository,
+    val transfer: VaultTransferManager,
 ) {
     companion object {
         private const val DIR_NAME = "legenddrry"
@@ -27,7 +29,7 @@ class CoreContainer private constructor(
         fun create(context: Context): CoreContainer {
             val dir = File(context.applicationContext.noBackupFilesDir, DIR_NAME)
             val vault = EncryptedVault(dir, AndroidKeystoreKeyWrapper())
-            return CoreContainer(vault, vault)
+            return CoreContainer(vault, vault, VaultTransferManager(vault, vault))
         }
     }
 }
