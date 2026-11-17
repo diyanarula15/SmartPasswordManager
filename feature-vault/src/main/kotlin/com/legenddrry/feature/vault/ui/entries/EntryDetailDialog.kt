@@ -56,6 +56,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.legenddrry.core.VaultEntry
+import com.legenddrry.feature.vault.LocalVaultDisplayOptions
 import com.legenddrry.feature.vault.ui.common.VaultTestTags
 import com.legenddrry.feature.vault.ui.components.StrengthMeter
 import java.text.DateFormat
@@ -79,8 +80,9 @@ internal fun EntryDetailDialog(
     onCopyUsername: () -> Unit,
     onCopyPassword: () -> Unit,
 ) {
-    // Keyed by id: visibility resets to hidden whenever a (different) entry is opened.
-    var passwordVisible by remember(entry.id) { mutableStateOf(false) }
+    // Keyed by id: visibility resets to the default whenever a (different) entry is opened.
+    val showByDefault = LocalVaultDisplayOptions.current.showPasswordsByDefault
+    var passwordVisible by remember(entry.id, showByDefault) { mutableStateOf(showByDefault) }
 
     Dialog(
         onDismissRequest = onClose,

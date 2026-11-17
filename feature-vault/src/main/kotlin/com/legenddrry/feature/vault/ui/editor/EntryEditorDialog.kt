@@ -55,6 +55,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.window.DialogWindowProvider
+import com.legenddrry.feature.vault.LocalVaultDisplayOptions
 import com.legenddrry.feature.vault.model.DraftField
 import com.legenddrry.feature.vault.model.EntryDraft
 import com.legenddrry.feature.vault.model.normalized
@@ -79,7 +80,8 @@ fun EntryEditorDialog(
 ) {
     var draft by remember(initial) { mutableStateOf(initial) }
     var saveAttempted by remember(initial) { mutableStateOf(false) }
-    var passwordVisible by rememberSaveable { mutableStateOf(false) }
+    val showByDefault = LocalVaultDisplayOptions.current.showPasswordsByDefault
+    var passwordVisible by rememberSaveable { mutableStateOf(showByDefault) }
     var categoryExpanded by remember { mutableStateOf(false) }
 
     // Errors appear only after the first save attempt, then update live.
