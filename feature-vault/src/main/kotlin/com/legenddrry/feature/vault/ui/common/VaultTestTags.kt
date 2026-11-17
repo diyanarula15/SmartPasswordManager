@@ -1,4 +1,4 @@
-// OWNER: orchestrator (shared, LOCKED). UI pieces MUST apply these tags; UI tests rely on them.
+// Semantics test tags used by the UI and the instrumented tests.
 package com.legenddrry.feature.vault.ui.common
 
 object VaultTestTags {

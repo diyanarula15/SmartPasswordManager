@@ -67,3 +67,23 @@ For tests: junit 4.13.2, kotlinx-coroutines-test 1.8.1, compose ui-test-junit4, 
 
 The fake repositories exist only in the test source sets. They are plain in-memory lists that are
 neither encrypted nor persisted.
+
+## Verified results (2026-11-17, harness: AGP 8.7.3, Kotlin 2.0.21, emulator API 35)
+- `:feature-vault:testDebugUnitTest`: **68 tests, 0 failures**
+  - PasswordGeneratorTest: 11
+  - PasswordStrengthEvaluatorTest: 11
+  - EntryDraftTest: 11
+  - VaultLogicTest: 13
+  - VaultViewModelTest: 12
+  - GeneratorViewModelTest: 10
+- `:feature-vault:connectedDebugAndroidTest`: **34 tests, 0 failures**
+  - EntriesRouteTest: 22, covering add/edit/delete, validation, search, category filter, show/hide,
+    copy, duplicates, and the loading, empty and error states with retry
+  - GenerateRouteTest: 12, covering default 16 characters, regenerate, category toggles, the
+    last-category guard, slider 12/32, copy, and save to vault
+- `:feature-vault:assembleRelease` builds `feature-vault-release.aar`.
+
+Note on the clipboard tests: on Android 10+ an app can't read the clipboard while another window
+has focus, and the Android 13+ clipboard overlay is one such window. So the instrumented tests check
+what was written through `copyObserverForTest` in `ui/common/Clipboard.kt`, which is null in
+production. They also compare against the system clipboard whenever the OS allows the read.

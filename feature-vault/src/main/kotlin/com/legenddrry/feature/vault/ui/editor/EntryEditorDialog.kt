@@ -1,4 +1,4 @@
-// OWNER: worker "entries-ui". LOCKED API — keep signature. Used by GenerateRoute too.
+// Used by GenerateRoute too.
 package com.legenddrry.feature.vault.ui.editor
 
 import android.view.WindowManager

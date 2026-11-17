@@ -1,4 +1,3 @@
-// OWNER: worker "generator-ui".
 package com.legenddrry.feature.vault.ui.generator
 
 import androidx.compose.foundation.layout.Arrangement

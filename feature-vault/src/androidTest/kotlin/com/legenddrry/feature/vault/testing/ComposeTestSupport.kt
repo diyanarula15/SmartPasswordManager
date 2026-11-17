@@ -1,4 +1,4 @@
-// OWNER: worker "ui-tests". Shared helpers for the instrumented Compose tests.
+// Shared helpers for the instrumented Compose tests.
 package com.legenddrry.feature.vault.testing
 
 import android.content.ClipData
@@ -102,28 +102,42 @@ fun ComposeContentTestRule.isOn(tag: String): Boolean = toggleStateOf(tag) == To
 
 private val instrumentation get() = InstrumentationRegistry.getInstrumentation()
 
+/** Last text our code wrote via copyToClipboard (captured through the test seam). */
+@Volatile
+var lastCopiedText: String? = null
+
+/** Reads the system clipboard; null when Android denies access (another window has focus). */
 fun readClipboardText(): String? {
     var result: String? = null
     instrumentation.runOnMainSync {
         val ctx = instrumentation.targetContext
         val cm = ctx.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        val clip = cm.primaryClip
+        val clip = runCatching { cm.primaryClip }.getOrNull()
         result = if (clip != null && clip.itemCount > 0) clip.getItemAt(0).coerceToText(ctx)?.toString() else null
     }
     return result
 }
 
 fun clearClipboard() {
+    lastCopiedText = null
+    com.legenddrry.feature.vault.ui.common.copyObserverForTest = { _, text -> lastCopiedText = text }
     instrumentation.runOnMainSync {
         val cm = instrumentation.targetContext.getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-            cm.clearPrimaryClip()
-        } else {
-            cm.setPrimaryClip(ClipData.newPlainText("cleared", ""))
+        runCatching {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) cm.clearPrimaryClip()
+            else cm.setPrimaryClip(ClipData.newPlainText("cleared", ""))
         }
     }
 }
 
+/**
+ * Asserts the app copied exactly [expected]. The write is observed through the test seam;
+ * the system clipboard is also checked whenever the OS lets the test read it.
+ */
 fun ComposeContentTestRule.awaitClipboard(expected: String, timeoutMs: Long = WAIT_MS) {
-    await("clipboard to contain '$expected' (was '${readClipboardText()}')", timeoutMs) { readClipboardText() == expected }
+    await("clipboard write of '$expected' (was '$lastCopiedText')", timeoutMs) { lastCopiedText == expected }
+    val system = readClipboardText()
+    if (system != null) {
+        org.junit.Assert.assertEquals("system clipboard content", expected, system)
+    }
 }

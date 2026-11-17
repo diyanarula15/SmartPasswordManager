@@ -1,4 +1,3 @@
-// OWNER: orchestrator (shared). Do not edit in worker tasks.
 package com.legenddrry.feature.vault.ui.common
 
 import android.content.ClipData
@@ -20,4 +19,14 @@ fun copyToClipboard(context: Context, label: String, text: String, sensitive: Bo
         }
     }
     clipboard.setPrimaryClip(clip)
+    copyObserverForTest?.invoke(label, text)
 }
+
+/**
+ * Test seam: instrumented tests set this to observe what was written, because on Android 10+
+ * a test can't read the clipboard back while another window (such as the system clipboard
+ * overlay) has focus. It's always null in production, and nothing is retained.
+ */
+@androidx.annotation.VisibleForTesting
+@Volatile
+internal var copyObserverForTest: ((label: String, text: String) -> Unit)? = null

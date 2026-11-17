@@ -1,4 +1,3 @@
-// OWNER: worker "logic". LOCKED API — keep signature.
 package com.legenddrry.feature.vault.ui.components
 
 import androidx.compose.animation.animateColorAsState

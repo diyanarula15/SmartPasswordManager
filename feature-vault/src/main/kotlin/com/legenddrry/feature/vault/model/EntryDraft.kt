@@ -1,4 +1,3 @@
-// OWNER: worker "state". LOCKED API — keep signatures.
 package com.legenddrry.feature.vault.model
 
 import com.legenddrry.core.VaultEntry

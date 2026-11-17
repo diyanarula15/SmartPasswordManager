@@ -1,4 +1,3 @@
-// OWNER: worker "logic". LOCKED API — keep signatures.
 package com.legenddrry.feature.vault.generator
 
 import java.security.SecureRandom

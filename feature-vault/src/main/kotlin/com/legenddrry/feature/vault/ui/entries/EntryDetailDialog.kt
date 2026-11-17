@@ -1,4 +1,3 @@
-// OWNER: worker "entries-ui".
 package com.legenddrry.feature.vault.ui.entries
 
 import androidx.compose.foundation.layout.Arrangement

@@ -1,4 +1,3 @@
-// OWNER: worker "state". LOCKED API — keep public signatures.
 package com.legenddrry.feature.vault.state
 
 import androidx.lifecycle.ViewModel

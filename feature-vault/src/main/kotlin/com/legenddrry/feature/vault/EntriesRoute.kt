@@ -1,4 +1,4 @@
-// OWNER: worker "entries-ui". FROZEN PUBLIC SIGNATURE — do not change.
+// Public entry point; signature frozen by the integration contract.
 package com.legenddrry.feature.vault
 
 import androidx.compose.foundation.layout.Arrangement

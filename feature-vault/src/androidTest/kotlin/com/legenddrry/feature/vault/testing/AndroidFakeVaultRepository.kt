@@ -1,4 +1,4 @@
-// OWNER: worker "ui-tests". Test-only fake. Plain in-memory storage: NO encryption, NO persistence.
+// Test-only fake. Plain in-memory storage: NO encryption, NO persistence.
 package com.legenddrry.feature.vault.testing
 
 import com.legenddrry.core.VaultEntry

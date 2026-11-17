@@ -1,4 +1,4 @@
-// OWNER: worker "ui-tests". Instrumented tests for EntriesRoute against the VaultTestTags contract.
+// Instrumented tests for EntriesRoute against the VaultTestTags contract.
 package com.legenddrry.feature.vault
 
 import androidx.compose.material3.MaterialTheme
