@@ -1,12 +1,14 @@
 plugins {
-    id("com.android.library")
-    id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.plugin.compose")
+    // AGP 9 compiles Kotlin itself (built-in Kotlin); only the Compose compiler plugin is applied.
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.kotlin.compose)
 }
 
 android {
     namespace = "com.legenddrry.feature.tools"
-    compileSdk = 35
+    compileSdk {
+        version = release(37)
+    }
     defaultConfig {
         minSdk = 26
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
@@ -17,7 +19,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
-    kotlinOptions { jvmTarget = "17" }
     testOptions {
         targetSdk = 35 // Avoid legacy-target system dialogs in the standalone test APK.
         unitTests.isReturnDefaultValues = true

@@ -24,4 +24,7 @@ dependencyResolutionManagement {
 
 rootProject.name = "SmartPasswordManager"
 include(":app")
+include(":core")
+include(":feature-vault")
+include(":feature-tools")
  
