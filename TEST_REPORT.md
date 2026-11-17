@@ -1,54 +1,88 @@
-# LegenDDRRY test report (2026-11-17)
+# LegenDDRRY combined application audit
 
-Environment: macOS, JDK 21 (Gradle daemon JDK 25), Gradle 9.6.0, AGP 9.5.1, emulator `emulator-5554` (API 35). The
-emulator was shared with other work; an unrelated demo app produced ANR dialogs during some runs.
-Only tests that were actually executed are marked Pass.
+18 November 2026 (Asia/Kolkata). Branch: `feature/offline-vault-transfer`.
 
-## Build
-| Test | Expected | Actual | Result | Evidence |
-|---|---|---|---|---|
-| `./gradlew :app:assembleDebug` (all 4 modules) | APK built | BUILD SUCCESSFUL | Pass | `app/build/outputs/apk/debug/app-debug.apk` (~18.8 MB) |
-| Module resolution / imports / manifests | No errors | No compile errors, no manifest conflicts | Pass | same build |
+**Final build succeeded. All 222 JVM tests and 70 distinct ordinary device tests passed, plus both externally coordinated process-restart phases.**
 
-## Unit tests (`./gradlew testDebugUnitTest`)
-| Module | Tests | Failures | Result | Covers |
-|---|---|---|---|---|
-| core | 22 | 0 | Pass | setup, correct/wrong unlock, too-short password, lockout, locked vault access prevented, add/edit/delete, emissions, persistence across new instances, no plaintext on disk, corrupt-file handling |
-| feature-vault | 68 | 0 | Pass | generator length/categories/randomness, strength, validation, search/filter, duplicates, ViewModels |
-| feature-tools | 45 | 0 | Pass | approval transitions and expiry, alias CRUD, security state, settings |
-| app | 23 + 21 | 0 | Pass | settings persistence, persistent aliases, vault-backed dashboard stats; shell navigator back rules, auto-lock controller |
+## Environment and evidence
 
-## Instrumented tests (integrated app on emulator)
-| Test | Expected | Actual | Result |
-|---|---|---|---|
-| test01 setup: short/mismatched rejected, then lands in vault | errors shown, then vault | as expected | Pass |
-| test02 lock, wrong password rejected, Back doesn't reveal vault, correct password unlocks | access denied, then restored | as expected | Pass |
-| test03 vault: add "Demo Account", search, detail, edit username, show/hide, copy | all work | as expected | Pass |
-| test04 generator: length 20, all classes, copy, save, appears in Vault tab (shared repository) | entry appears | as expected | Pass |
-| test05 security dashboard: real total, reused count updates after adding a reused password | real counts | as expected | Pass |
-| test06 approvals: create, approve, create, deny, history, approved can't be re-approved | correct transitions | as expected | Pass |
-| test07 aliases: create, search, copy, disable/enable, delete | all work | Pass after fixes (see below) | Pass |
-| test08 settings: dark/light theme, auto-lock, clipboard, show passwords, Back | values stored in settings repository | as expected | Pass |
-| test09a/b/c navigation: all tabs repeatedly, single NavigationBar, Back to Vault, More sub-screens | correct | as expected | Pass |
-| core `KeystoreVaultInstrumentedTest` (2) | real Keystore round trip, real-file persistence | passed (core worker run) | Pass |
-| feature-vault instrumented suite (34) | | not re-run on the integrated build | Not executed |
-| feature-tools `FeatureRoutesTest` / gallery | | not re-run on the integrated build | Not executed |
+Android 15/API 35 private emulator `emulator-5570`; Gradle 9.6.0; AGP 9.5.1; Compose BOM 2026.02.01. The emulator was offline during testing. Build outputs and project cache were isolated under `/tmp/legenddrry-transfer-build/`. The other developer's build and emulator were not modified.
 
-Failures found and fixed along the way:
-1. test07 crashed with `NoSuchMethodError: FlowRow`. feature-tools compiled against Compose BOM 2024.12.01 while the
-   app ships 2026.02.01. Fixed by using the catalog BOM in `feature-tools/build.gradle.kts`.
-2. test07 timed out re-enabling or deleting an alias. The test's coordinate taps landed on the floating "create alias"
-   button that overlaps the bottom of the scrolled list. Fixed in the test, which now uses semantic click actions. No
-   product code was changed.
+The original `emulator-5554` was inspected read-only: physical1080×2400/density420, override540×1200/density210, rotation0. Its override preserves the same logical screen dimensions. No reset was applied to that shared device.
 
-## Manual on-device checks
-| Test | Result | Notes |
-|---|---|---|
-| Fresh install → master password setup → empty vault | Pass | Screens rendered in Sage & Clay |
-| Add credential "Demo Account" through the editor | Pass | appears in list |
-| Process kill → relaunch → unlock → credentials still present (Test H) | Not executed on device | Stopped on request. Persistence across new instances over the same encrypted files is covered by the core unit tests and the core instrumented test. |
-| Rotation, small screen, keyboard-heavy forms | Not executed | |
+Evidence is copied to `artifacts/offline-vault-transfer-audit/` in the original workspace, including APK, XML results, initial/final logs, restart logs and checksums. Original temporary logs:
 
-## Known gaps
-- On-device restart persistence (Test H) and rotation weren't run manually. See above for the automated coverage.
-- The "show passwords" setting is stored but not applied by the vault module (it always opens entries hidden).
+- `/tmp/legenddrry-combined-audit-initial.log`
+- `/tmp/legenddrry-rotation-rerun.log`
+- `/tmp/legenddrry-restart-seed.log`, `/tmp/legenddrry-restart-launch.log`, `/tmp/legenddrry-restart-verify.log`
+
+## JVM tests
+
+| Module | Passed | Failures/errors/skips |
+|---|---:|---:|
+| core | 56 | 0 |
+| feature-vault | 68 | 0 |
+| feature-tools | 45 | 0 |
+| app | 53 | 0 |
+| **Total** | **222** | **0** |
+
+Coverage includes auth/lockout, encrypted CRUD, persistence/corruption, backup codec/manager and all import modes, atomic rollback, cancellation/lock races, generator/validation, approval expiry/decisions, aliases, settings and live security statistics. JVM crypto uses software key-wrapper doubles; device tests below use real Android Keystore.
+
+## Device tests
+
+| Module | Distinct ordinary tests passed | Scope |
+|---|---:|---|
+| core | 3 | Two Keystore tests; one 20-record portable transfer test |
+| feature-vault | 39 | Entries22, generator12, show-password options5 |
+| feature-tools | 11 | Routes10, light/dark gallery1 |
+| app | 17 | Main flows7, tools4, lifecycle/layout4, native SAF1, context1 |
+| **Total** | **70** | **No unresolved failures** |
+
+The initial combined run recorded72 cases:69 passed,1 failed,2 intentionally skipped. The sole failure was a new lifecycle assertion that used a generic text helper: it returned the outlined field's label when EditableText was empty. The corrected assertion requires actual EditableText to exist and be empty. Its focused rerun passed, including rotation, generated-draft recreation, saving, locking and draft removal. Production code was not changed to bypass the assertion. The initial failure log/XML are retained separately.
+
+The focused command `:app:connectedDebugAndroidTest :app:assembleDebug` completed **BUILD SUCCESSFUL** (53s). No broad rerun was needed after this assertion-only correction; all other tests had passed against the same production sources.
+
+The two process-phase methods are intentionally skipped in an ordinary suite because they require an external process kill between them. Both were then executed separately and passed; skipped cases are not counted as passes above.
+
+## End-to-end checks
+
+| Check | Genuine result |
+|---|---|
+| Setup validation; wrong password; lock; Back cannot expose vault | Passed |
+| Vault add/search/detail/edit/reveal/copy; generator copy/save; tab/back navigation | Passed |
+| Approvals create/approve/deny/history; invalid repeat decisions | Passed; expiry also covered by tools JVM tests |
+| Aliases create/search/copy/toggle/delete | Passed using real touch interactions, including previously covered FAB controls |
+| Security real counts update when vault changes | Passed |
+| Settings light/dark/system controls, auto-lock, clipboard and show passwords | Passed; light/dark gallery also passed |
+| Show-password preference reaches actual detail/editor, both directions; manual toggle | Passed in combined app, plus five module device tests |
+| Saved entry/settings and unlocked session survive Activity recreation | Passed |
+| Actual landscape rotation retains unsaved editor draft; generator draft retains original password across recreation | Passed |
+| Lock discards unsaved secret drafts | Passed with strict empty EditableText assertions |
+| Actual320dp activity width, settings dialogs/actions, dashboard metrics and navigation | Passed; window size restored in finally |
+| Empty/loading/error/retry states | Passed in module device/JVM suites |
+| Force-stop, launch, authentication, saved records/edits/deletion/settings/alias survive | Passed, both external phases `OK (1 test)` |
+| Native Android DocumentsUI export/import | Passed on local Downloads provider |
+
+### Actual process restart
+
+The seed phase creates three synthetic encrypted records, edits one (password, username, notes, category, timestamp), deletes another, sets DARK/15-minute lock/60-second clipboard/show-passwords, and creates a disabled alias. The external runner executes `am force-stop com.example.group4app`, followed by `am start -W -n com.example.group4app/.MainActivity`. The verify phase requires LOCKED, unlocks through the real UI, checks the exact remaining IDs/edited fields and persisted settings/disabled alias, and verifies show-password behavior in the real detail screen. Both phases passed without resetting storage between them.
+
+### Portable backup and real file picker
+
+The core device test uses20 Unicode records, both backup password methods, different local master passwords and independent real Android Keystore aliases. It deletes the source key before restore. Wrong passwords/tampered ciphertext leave destination data/files unchanged; restored fields persist after reopening the destination vault.
+
+The app SAF test saves a transfer-password-encrypted `.vault` through native DocumentsUI into Downloads, independently checks ciphertext, deletes its synthetic source record, cancels a real import picker, reopens the saved file, previews without writes, rejects a wrong destination master password, then restores every field with the correct password. Its unique synthetic document is removed afterwards.
+
+## Bugs fixed
+
+1. Vault and persistent alias writes could commit to disk but leave stale memory if cancellation occurred while returning from IO. Subsequent writes could lose committed changes. Publication now occurs alongside the successful write before that cancellation boundary. Deterministic regressions passed.
+2. Settings published success before durable storage. They now perform a checked SharedPreferences commit on IO before publication; failed-write regression passed.
+3. Unsaved vault/generator editor drafts disappeared on rotation. Session-owned ViewModels preserve initial/current drafts, including generated passwords, and clear on cancel/save/lock. Secrets are not saved in Bundles.
+4. The alias FAB intercepted touches on scrolled controls. A reserved bottom action strip keeps controls reachable; the prior semantic-click workaround was removed from the integrated regression.
+5. Tools gallery test compilation lacked explicit Activity/Core APIs. Test dependencies now match the host catalog. Core/vault standalone test APK targets avoid legacy-target warning dialogs; production app target remains unchanged.
+
+## Integration and limits
+
+The branch includes the tools and show-password changes plus offline backup and this audit. Public tools routes and repository contracts remain compatible. Keep the app's `LocalVaultDisplayOptions` and transfer-section providers, and the existing session ViewModelStore owner that clears on lock. See `OFFLINE_VAULT_TRANSFER.md` and `TRANSFER_CONTRACT.md` for transfer integration/format details. No global navigation or startup animation was added.
+
+Coverage is one API35 emulator. Local Downloads SAF passed; other document providers, provider write-failure cleanup and physical two-device transfer were not exercised. Independent Keystore portability was exercised on device. Backup dialogs cancel on rotation and require restarting that operation; vault editor drafts survive rotation. Approvals remain demonstrations, aliases do not forward email, and security statistics make no breach-detection claim.

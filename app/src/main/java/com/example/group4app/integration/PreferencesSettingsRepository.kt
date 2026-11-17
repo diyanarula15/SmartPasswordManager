@@ -5,6 +5,9 @@ import android.content.SharedPreferences
 import com.legenddrry.feature.tools.contracts.SettingsRepository
 import com.legenddrry.feature.tools.contracts.ThemeMode
 import com.legenddrry.feature.tools.contracts.ToolPreferences
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import java.io.IOException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,7 +21,7 @@ import kotlinx.coroutines.sync.withLock
  * The [preferences] StateFlow is initialised synchronously from disk at construction; missing,
  * mistyped or out-of-range stored values fall back to the [ToolPreferences] defaults per field.
  * Setters validate exactly like the in-memory repository (IllegalArgumentException for
- * non-positive durations), publish the new value immediately and persist it.
+ * non-positive durations), persist the new value before publishing success.
  */
 class PreferencesSettingsRepository internal constructor(
     private val store: SettingsKeyValueStore,
@@ -50,7 +53,7 @@ class PreferencesSettingsRepository internal constructor(
 
     private suspend fun mutate(transform: (ToolPreferences) -> ToolPreferences) = mutex.withLock {
         val updated = transform(mutablePreferences.value)
-        mutablePreferences.value = updated
+        withContext(Dispatchers.IO) {
         store.write(
             mapOf(
                 KEY_THEME_MODE to updated.themeMode.name,
@@ -59,6 +62,8 @@ class PreferencesSettingsRepository internal constructor(
                 KEY_SHOW_PASSWORDS to updated.showPasswords,
             )
         )
+        mutablePreferences.value = updated
+        }
     }
 
     internal companion object {
@@ -113,9 +118,8 @@ internal class SharedPreferencesKeyValueStore(
                 else -> throw IllegalArgumentException("Unsupported preference type for $key")
             }
         }
-        // apply(): in-memory SharedPreferences updated synchronously, disk write is async and
-        // flushed by the framework before the process is considered stopped.
-        editor.apply()
+        // Called on IO: acknowledge durability before publishing success to UI.
+        if (!editor.commit()) throw IOException("Could not save preferences.")
     }
 
     private inline fun <T> typed(read: () -> T?): T? =

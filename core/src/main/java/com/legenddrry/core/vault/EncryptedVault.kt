@@ -335,11 +335,16 @@ internal class EncryptedVault internal constructor(
                         }
                     }
                 } else {
-                    withContext(ioDispatcher) { files.writeVault(key, updated) } // persist BEFORE emitting
-                    synchronized(sessionLock) {
-                        if (generation == gen && dek != null) {
-                            cache = updated
-                            _entries.tryEmit(updated)
+                    withContext(ioDispatcher) {
+                        files.writeVault(key, updated) // persist BEFORE emitting
+                        // Publish before returning across the cancellable dispatcher boundary.
+                        // Otherwise a committed write can leave stale cache, and the next
+                        // mutation would overwrite the successfully persisted change.
+                        synchronized(sessionLock) {
+                            if (generation == gen && dek != null) {
+                                cache = updated
+                                _entries.tryEmit(updated)
+                            }
                         }
                     }
                 }

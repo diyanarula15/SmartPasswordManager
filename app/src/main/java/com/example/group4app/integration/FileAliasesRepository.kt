@@ -9,6 +9,7 @@ import java.nio.file.AtomicMoveNotSupportedException
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.util.UUID
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,10 +33,18 @@ import org.json.JSONObject
  * repository starts empty. Writes are atomic (temp file + rename) and mutations are serialized.
  * A mutation only publishes its new list after the file write succeeded (IOException otherwise).
  */
-class FileAliasesRepository(
+class FileAliasesRepository private constructor(
     private val file: File,
-    private val clock: () -> Long = System::currentTimeMillis,
+    private val clock: () -> Long,
+    private val ioDispatcher: CoroutineDispatcher,
 ) : AliasesRepository {
+
+    constructor(file: File, clock: () -> Long = System::currentTimeMillis) :
+        this(file, clock, Dispatchers.IO)
+
+    /** Deterministic dispatcher seam for cancellation-at-commit regression tests. */
+    internal constructor(file: File, ioDispatcher: CoroutineDispatcher, clock: () -> Long = System::currentTimeMillis) :
+        this(file, clock, ioDispatcher)
 
     private val mutex = Mutex()
     private val mutableAliases = MutableStateFlow(loadFromDisk())
@@ -73,8 +82,12 @@ class FileAliasesRepository(
 
     /** Must be called with [mutex] held. Persists first, then publishes. */
     private suspend fun commit(updated: List<EmailAlias>) {
-        withContext(Dispatchers.IO) { writeAtomically(encode(updated)) }
-        mutableAliases.value = updated
+        withContext(ioDispatcher) {
+            writeAtomically(encode(updated))
+            // Publish before crossing the cancellable dispatcher boundary. A caller can leave
+            // the screen after the atomic rename; the next mutation must see that durable state.
+            mutableAliases.value = updated
+        }
     }
 
     private fun writeAtomically(content: String) {

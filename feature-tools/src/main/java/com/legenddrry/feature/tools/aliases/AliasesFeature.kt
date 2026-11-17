@@ -9,10 +9,8 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
@@ -114,62 +112,64 @@ internal fun AliasesFeature(repository: AliasesRepository) {
     }
 
     Box(Modifier.fillMaxSize()) {
-        ToolPage("Hide my email", "Demo aliases — email forwarding not enabled") {
-            ToolNotice(
-                title = "Local demo aliases",
-                message = "Local demonstration records only. These example.com addresses do not receive or forward email.",
-                icon = "mail",
-            )
-            feedback?.let { message ->
-                Box(Modifier.testTag("aliases-feedback")) {
-                    ToolFeedback(message, failed, onDismiss = { clearFeedback() })
+        // Reserve a permanent action strip: an in-scroll footer cannot stop the FAB from
+        // intercepting taps on a card that is visible partway through the list.
+        Box(Modifier.fillMaxSize().padding(bottom = 88.dp)) {
+            ToolPage("Hide my email", "Demo aliases — email forwarding not enabled") {
+                ToolNotice(
+                    title = "Local demo aliases",
+                    message = "Local demonstration records only. These example.com addresses do not receive or forward email.",
+                    icon = "mail",
+                )
+                feedback?.let { message ->
+                    Box(Modifier.testTag("aliases-feedback")) {
+                        ToolFeedback(message, failed, onDismiss = { clearFeedback() })
+                    }
+                }
+                ToolSectionTitle("Your aliases", "A separate local record for each service.")
+                ToolTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    label = "Search aliases",
+                    supportingText = "Search website, service, or alias address",
+                    leadingIcon = "search",
+                    search = true,
+                    modifier = Modifier.testTag("aliases-search"),
+                )
+                val filtered = filterAliases(aliases, query)
+                Text(
+                    "Saved aliases (${filtered.size})",
+                    style = ToolsType.label,
+                    color = colors.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
+                if (aliases.isEmpty()) {
+                    EmptyToolState("No aliases yet", "Create a demo alias for a website or service to see it here.")
+                } else if (filtered.isEmpty()) {
+                    EmptyToolState("No matching aliases", "Try a different service name or email address.")
+                } else {
+                    filtered.forEach { alias ->
+                        AliasCard(
+                            alias = alias,
+                            busy = busy,
+                            onCopy = { copy(alias) },
+                            onToggle = { active ->
+                                perform(if (active) "Demo alias enabled." else "Demo alias disabled.") {
+                                    repository.setActive(alias.id, active)
+                                }
+                            },
+                            onDetails = {
+                                clearFeedback()
+                                detailId = alias.id
+                            },
+                            onDelete = {
+                                clearFeedback()
+                                deleteId = alias.id
+                            },
+                        )
+                    }
                 }
             }
-            ToolSectionTitle("Your aliases", "A separate local record for each service.")
-            ToolTextField(
-                value = query,
-                onValueChange = { query = it },
-                label = "Search aliases",
-                supportingText = "Search website, service, or alias address",
-                leadingIcon = "search",
-                search = true,
-                modifier = Modifier.testTag("aliases-search"),
-            )
-            val filtered = filterAliases(aliases, query)
-            Text(
-                "Saved aliases (${filtered.size})",
-                style = ToolsType.label,
-                color = colors.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-            if (aliases.isEmpty()) {
-                EmptyToolState("No aliases yet", "Create a demo alias for a website or service to see it here.")
-            } else if (filtered.isEmpty()) {
-                EmptyToolState("No matching aliases", "Try a different service name or email address.")
-            } else {
-                filtered.forEach { alias ->
-                    AliasCard(
-                        alias = alias,
-                        busy = busy,
-                        onCopy = { copy(alias) },
-                        onToggle = { active ->
-                            perform(if (active) "Demo alias enabled." else "Demo alias disabled.") {
-                                repository.setActive(alias.id, active)
-                            }
-                        },
-                        onDetails = {
-                            clearFeedback()
-                            detailId = alias.id
-                        },
-                        onDelete = {
-                            clearFeedback()
-                            deleteId = alias.id
-                        },
-                    )
-                }
-            }
-            // Keep the final card and its actions above the anchored creation button.
-            Spacer(Modifier.height(104.dp))
         }
         ExtendedFloatingActionButton(
             onClick = {

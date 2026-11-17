@@ -10,7 +10,6 @@ import com.legenddrry.feature.tools.contracts.ApprovalStatus
 import com.legenddrry.feature.tools.contracts.ThemeMode
 import kotlinx.coroutines.runBlocking
 import androidx.compose.ui.test.onAllNodesWithTag
-import androidx.compose.ui.test.performSemanticsAction
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -152,8 +151,7 @@ class ToolsFlowTest : E2eTestBase() {
             compose.textOrNull(ToolTags.ALIASES_FEEDBACK)?.contains("copied", ignoreCase = true) == true
         }
 
-        // Disable / enable. Toggle via the Switch's semantic click: after scroll-to, the switch can sit under the
-        // anchored "create alias" FAB, and a coordinate tap would hit the FAB instead.
+        // Exercise real taps: the FAB must not cover scrolled alias controls.
         toggleAlias(alias.id)
         compose.await("alias to be disabled") { repo.aliases.value.first { it.id == alias.id }.isActive.not() }
         compose.await("switch to show Off") { compose.toggleState(ToolTags.aliasToggle(alias.id)) == ToggleableState.Off }
@@ -169,7 +167,7 @@ class ToolsFlowTest : E2eTestBase() {
         compose.await("switch to show On") { compose.toggleState(ToolTags.aliasToggle(alias.id)) == ToggleableState.On }
 
         // Delete (confirmed).
-        semanticClick(ToolTags.aliasDelete(alias.id))
+        compose.click(ToolTags.aliasDelete(alias.id))
         compose.click(ToolTags.ALIASES_CONFIRM_DELETE)
         compose.await("alias to be deleted") { repo.aliases.value.none { it.id == alias.id } }
         compose.awaitTagGone(ToolTags.aliasCopy(alias.id))
@@ -220,13 +218,5 @@ class ToolsFlowTest : E2eTestBase() {
         assertEquals(clipboard, settings.preferences.value.clipboardClearSeconds)
     }
 
-    private fun toggleAlias(id: String) = semanticClick(ToolTags.aliasToggle(id))
-
-    /** Clicks via the semantics action, immune to the anchored FAB overlapping the bottom of the scrolled list. */
-    private fun semanticClick(tag: String) {
-        compose.awaitTag(tag)
-        compose.onAllNodesWithTag(tag, useUnmergedTree = true)[0]
-            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
-        compose.waitForIdle()
-    }
+    private fun toggleAlias(id: String) = compose.click(ToolTags.aliasToggle(id))
 }

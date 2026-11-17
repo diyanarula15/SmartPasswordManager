@@ -41,6 +41,7 @@ import com.legenddrry.core.VaultRepository
 import com.legenddrry.feature.vault.model.EntryDraft
 import com.legenddrry.feature.vault.model.toDraft
 import com.legenddrry.feature.vault.state.VaultViewModel
+import com.legenddrry.feature.vault.state.EditorDraftViewModel
 import com.legenddrry.feature.vault.ui.common.VaultTestTags
 import com.legenddrry.feature.vault.ui.common.copyToClipboard
 import com.legenddrry.feature.vault.ui.editor.EntryEditorDialog
@@ -60,13 +61,17 @@ fun EntriesRoute(repository: VaultRepository) {
         factory = viewModelFactory { initializer { VaultViewModel(repository) } },
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val editorVm: EditorDraftViewModel = viewModel(
+        key = "legenddrry-vault-editor-draft",
+        factory = viewModelFactory { initializer { EditorDraftViewModel() } },
+    )
+    val editorState by editorVm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
 
     // Internal "navigation" state.
     var selectedId by rememberSaveable { mutableStateOf<String?>(null) }
-    var editorDraft by remember { mutableStateOf<EntryDraft?>(null) }
     var deleteTargetId by rememberSaveable { mutableStateOf<String?>(null) }
 
     // Always resolve from current state so edits show and deletions close the detail.
@@ -95,7 +100,7 @@ fun EntriesRoute(repository: VaultRepository) {
         }
     }
 
-    val openAddEditor = { editorDraft = EntryDraft() }
+    val openAddEditor = { editorVm.open(EntryDraft()) }
 
     Scaffold(
         modifier = Modifier.fillMaxSize().testTag(VaultTestTags.ENTRIES_SCREEN),
@@ -156,7 +161,7 @@ fun EntriesRoute(repository: VaultRepository) {
             reusedByCount = state.entries.count { it.id != entry.id && it.password == entry.password },
             snackbarHostState = snackbarHostState,
             onClose = { selectedId = null },
-            onEdit = { editorDraft = entry.toDraft() },
+            onEdit = { editorVm.open(entry.toDraft()) },
             onDelete = { deleteTargetId = entry.id },
             onCopyUsername = {
                 copyToClipboard(context, "Username", entry.username, sensitive = false)
@@ -169,13 +174,15 @@ fun EntriesRoute(repository: VaultRepository) {
         )
     }
 
-    editorDraft?.let { draft ->
+    editorState?.let { editor ->
         EntryEditorDialog(
-            initial = draft,
+            initial = editor.initial,
+            draftOverride = editor.draft,
+            onDraftChange = editorVm::update,
             categories = state.categories,
-            isDuplicatePassword = { vm.isPasswordDuplicate(it, draft.id) },
-            onDismiss = { editorDraft = null },
-            onSave = { edited -> vm.save(edited) { editorDraft = null } },
+            isDuplicatePassword = { vm.isPasswordDuplicate(it, editor.initial.id) },
+            onDismiss = editorVm::clear,
+            onSave = { edited -> vm.save(edited) { editorVm.clear() } },
         )
     }
 

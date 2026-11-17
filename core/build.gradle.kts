@@ -17,6 +17,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
     testOptions {
+        targetSdk = 35
         unitTests.isReturnDefaultValues = true
     }
 }

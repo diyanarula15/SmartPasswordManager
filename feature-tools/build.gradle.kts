@@ -38,6 +38,9 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation(composeBom)
+    // Gallery tests call modern activity/window APIs directly; do not rely on old test-host transitives.
+    androidTestImplementation(libs.androidx.activity.compose)
+    androidTestImplementation(libs.androidx.core.ktx)
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")

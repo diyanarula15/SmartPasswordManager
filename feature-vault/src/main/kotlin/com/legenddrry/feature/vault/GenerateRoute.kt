@@ -9,11 +9,8 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
@@ -24,6 +21,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.legenddrry.core.VaultRepository
 import com.legenddrry.feature.vault.model.EntryDraft
 import com.legenddrry.feature.vault.state.GeneratorViewModel
+import com.legenddrry.feature.vault.state.EditorDraftViewModel
 import com.legenddrry.feature.vault.ui.common.VaultTestTags
 import com.legenddrry.feature.vault.ui.common.copyToClipboard
 import com.legenddrry.feature.vault.ui.editor.EntryEditorDialog
@@ -37,10 +35,14 @@ fun GenerateRoute(repository: VaultRepository) {
         factory = viewModelFactory { initializer { GeneratorViewModel(repository) } },
     )
     val state by vm.uiState.collectAsStateWithLifecycle()
+    val editorVm: EditorDraftViewModel = viewModel(
+        key = "legenddrry-generator-editor-draft",
+        factory = viewModelFactory { initializer { EditorDraftViewModel() } },
+    )
+    val editorState by editorVm.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val snackbarHostState = remember { SnackbarHostState() }
-    var showSaveDialog by rememberSaveable { mutableStateOf(false) }
 
     LaunchedEffect(state.userMessage) {
         val message = state.userMessage ?: return@LaunchedEffect
@@ -65,15 +67,17 @@ fun GenerateRoute(repository: VaultRepository) {
                     snackbarHostState.showSnackbar(VaultTestTags.MSG_PASSWORD_COPIED)
                 }
             },
-            onSave = { showSaveDialog = true },
+            onSave = { editorVm.open(EntryDraft(password = state.password)) },
             modifier = Modifier.padding(padding),
         )
     }
 
-    if (showSaveDialog) {
-        val close = { showSaveDialog = false }
+    editorState?.let { editor ->
+        val close = editorVm::clear
         EntryEditorDialog(
-            initial = remember { EntryDraft(password = state.password) },
+            initial = editor.initial,
+            draftOverride = editor.draft,
+            onDraftChange = editorVm::update,
             categories = state.categories,
             isDuplicatePassword = vm::isPasswordDuplicate,
             onDismiss = close,

@@ -77,8 +77,17 @@ fun EntryEditorDialog(
     onDismiss: () -> Unit,
     onSave: (EntryDraft) -> Unit,
     dialogTitle: String = if (initial.id == null) "Add password" else "Edit password",
+    // Optional controlled state lets host routes retain drafts in their session ViewModel.
+    // Standalone callers keep the original local-state behavior.
+    draftOverride: EntryDraft? = null,
+    onDraftChange: ((EntryDraft) -> Unit)? = null,
 ) {
-    var draft by remember(initial) { mutableStateOf(initial) }
+    var localDraft by remember(initial) { mutableStateOf(initial) }
+    val draft = draftOverride ?: localDraft
+    fun updateDraft(updated: EntryDraft) {
+        localDraft = updated
+        onDraftChange?.invoke(updated)
+    }
     var saveAttempted by remember(initial) { mutableStateOf(false) }
     val showByDefault = LocalVaultDisplayOptions.current.showPasswordsByDefault
     var passwordVisible by rememberSaveable { mutableStateOf(showByDefault) }
@@ -136,7 +145,7 @@ fun EntryEditorDialog(
                 val titleError = errors[DraftField.TITLE]
                 OutlinedTextField(
                     value = draft.title,
-                    onValueChange = { draft = draft.copy(title = it) },
+                    onValueChange = { updateDraft(draft.copy(title = it)) },
                     modifier = Modifier.fillMaxWidth().testTag(VaultTestTags.EDITOR_TITLE),
                     label = { Text("Title") },
                     singleLine = true,
@@ -151,7 +160,7 @@ fun EntryEditorDialog(
                 )
                 OutlinedTextField(
                     value = draft.website,
-                    onValueChange = { draft = draft.copy(website = it) },
+                    onValueChange = { updateDraft(draft.copy(website = it)) },
                     modifier = Modifier.fillMaxWidth().testTag(VaultTestTags.EDITOR_WEBSITE),
                     label = { Text("Website") },
                     placeholder = { Text("example.com") },
@@ -160,7 +169,7 @@ fun EntryEditorDialog(
                 )
                 OutlinedTextField(
                     value = draft.username,
-                    onValueChange = { draft = draft.copy(username = it) },
+                    onValueChange = { updateDraft(draft.copy(username = it)) },
                     modifier = Modifier.fillMaxWidth().testTag(VaultTestTags.EDITOR_USERNAME),
                     label = { Text("Username or email") },
                     singleLine = true,
@@ -170,7 +179,7 @@ fun EntryEditorDialog(
                 val passwordError = errors[DraftField.PASSWORD]
                 OutlinedTextField(
                     value = draft.password,
-                    onValueChange = { draft = draft.copy(password = it) },
+                    onValueChange = { updateDraft(draft.copy(password = it)) },
                     modifier = Modifier.fillMaxWidth().testTag(VaultTestTags.EDITOR_PASSWORD),
                     label = { Text("Password") },
                     singleLine = true,
@@ -237,7 +246,7 @@ fun EntryEditorDialog(
                             DropdownMenuItem(
                                 text = { Text(option) },
                                 onClick = {
-                                    draft = draft.copy(category = option)
+                                    updateDraft(draft.copy(category = option))
                                     categoryExpanded = false
                                 },
                                 modifier = Modifier.testTag(VaultTestTags.EDITOR_CATEGORY_OPTION_PREFIX + option),
@@ -249,7 +258,7 @@ fun EntryEditorDialog(
 
                 OutlinedTextField(
                     value = draft.notes,
-                    onValueChange = { draft = draft.copy(notes = it) },
+                    onValueChange = { updateDraft(draft.copy(notes = it)) },
                     modifier = Modifier.fillMaxWidth().testTag(VaultTestTags.EDITOR_NOTES),
                     label = { Text("Notes") },
                     minLines = 3,
