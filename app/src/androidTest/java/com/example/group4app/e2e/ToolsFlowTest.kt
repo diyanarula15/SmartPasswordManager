@@ -169,7 +169,7 @@ class ToolsFlowTest : E2eTestBase() {
         compose.await("switch to show On") { compose.toggleState(ToolTags.aliasToggle(alias.id)) == ToggleableState.On }
 
         // Delete (confirmed).
-        compose.click(ToolTags.aliasDelete(alias.id))
+        semanticClick(ToolTags.aliasDelete(alias.id))
         compose.click(ToolTags.ALIASES_CONFIRM_DELETE)
         compose.await("alias to be deleted") { repo.aliases.value.none { it.id == alias.id } }
         compose.awaitTagGone(ToolTags.aliasCopy(alias.id))
@@ -220,8 +220,12 @@ class ToolsFlowTest : E2eTestBase() {
         assertEquals(clipboard, settings.preferences.value.clipboardClearSeconds)
     }
 
-    private fun toggleAlias(id: String) {
-        compose.onAllNodesWithTag(ToolTags.aliasToggle(id), useUnmergedTree = true)[0]
+    private fun toggleAlias(id: String) = semanticClick(ToolTags.aliasToggle(id))
+
+    /** Clicks via the semantics action, immune to the anchored FAB overlapping the bottom of the scrolled list. */
+    private fun semanticClick(tag: String) {
+        compose.awaitTag(tag)
+        compose.onAllNodesWithTag(tag, useUnmergedTree = true)[0]
             .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
         compose.waitForIdle()
     }
