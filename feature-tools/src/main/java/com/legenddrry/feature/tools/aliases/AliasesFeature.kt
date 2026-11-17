@@ -1,21 +1,29 @@
 package com.legenddrry.feature.tools.aliases
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -23,19 +31,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.legenddrry.feature.tools.components.EmptyToolState
+import com.legenddrry.feature.tools.components.ToolActionButton
+import com.legenddrry.feature.tools.components.ToolButtonKind
 import com.legenddrry.feature.tools.components.ToolCard
+import com.legenddrry.feature.tools.components.ToolDialog
+import com.legenddrry.feature.tools.components.ToolFeedback
+import com.legenddrry.feature.tools.components.ToolIcon
+import com.legenddrry.feature.tools.components.ToolIconTile
+import com.legenddrry.feature.tools.components.ToolNotice
 import com.legenddrry.feature.tools.components.ToolPage
+import com.legenddrry.feature.tools.components.ToolSectionTitle
+import com.legenddrry.feature.tools.components.ToolTextField
+import com.legenddrry.feature.tools.components.ToolsType
 import com.legenddrry.feature.tools.components.formatToolTimestamp
 import com.legenddrry.feature.tools.contracts.AliasesRepository
 import com.legenddrry.feature.tools.contracts.EmailAlias
@@ -56,6 +74,7 @@ internal fun AliasesFeature(repository: AliasesRepository) {
     var busy by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val clipboard = LocalClipboardManager.current
+    val colors = MaterialTheme.colorScheme
 
     fun perform(success: String, action: suspend () -> Unit) {
         if (busy) return
@@ -78,6 +97,11 @@ internal fun AliasesFeature(repository: AliasesRepository) {
         }
     }
 
+    fun clearFeedback() {
+        feedback = null
+        failed = false
+    }
+
     fun copy(alias: EmailAlias) {
         try {
             clipboard.setText(AnnotatedString(alias.aliasAddress))
@@ -89,101 +113,94 @@ internal fun AliasesFeature(repository: AliasesRepository) {
         }
     }
 
-    ToolPage("Hide My Email", "Demo Aliases — Email Forwarding Not Enabled") {
-        ToolCard {
-            Text("Local demonstration", style = MaterialTheme.typography.titleMedium)
-            Text("These saved records use example.com. They do not create working email addresses or forward mail. Enabling a record only changes its local status.")
-            Button(
-                onClick = {
+    Box(Modifier.fillMaxSize()) {
+        ToolPage("Hide my email", "Demo aliases — email forwarding not enabled") {
+            ToolNotice(
+                title = "Local demo aliases",
+                message = "Local demonstration records only. These example.com addresses do not receive or forward email.",
+                icon = "mail",
+            )
+            feedback?.let { message ->
+                Box(Modifier.testTag("aliases-feedback")) {
+                    ToolFeedback(message, failed, onDismiss = { clearFeedback() })
+                }
+            }
+            ToolSectionTitle("Your aliases", "A separate local record for each service.")
+            ToolTextField(
+                value = query,
+                onValueChange = { query = it },
+                label = "Search aliases",
+                supportingText = "Search website, service, or alias address",
+                leadingIcon = "search",
+                search = true,
+                modifier = Modifier.testTag("aliases-search"),
+            )
+            val filtered = filterAliases(aliases, query)
+            Text(
+                "Saved aliases (${filtered.size})",
+                style = ToolsType.label,
+                color = colors.onSurfaceVariant,
+                modifier = Modifier.padding(top = 8.dp),
+            )
+            if (aliases.isEmpty()) {
+                EmptyToolState("No aliases yet", "Create a demo alias for a website or service to see it here.")
+            } else if (filtered.isEmpty()) {
+                EmptyToolState("No matching aliases", "Try a different service name or email address.")
+            } else {
+                filtered.forEach { alias ->
+                    AliasCard(
+                        alias = alias,
+                        busy = busy,
+                        onCopy = { copy(alias) },
+                        onToggle = { active ->
+                            perform(if (active) "Demo alias enabled." else "Demo alias disabled.") {
+                                repository.setActive(alias.id, active)
+                            }
+                        },
+                        onDetails = {
+                            clearFeedback()
+                            detailId = alias.id
+                        },
+                        onDelete = {
+                            clearFeedback()
+                            deleteId = alias.id
+                        },
+                    )
+                }
+            }
+            // Keep the final card and its actions above the anchored creation button.
+            Spacer(Modifier.height(104.dp))
+        }
+        ExtendedFloatingActionButton(
+            onClick = {
+                if (!busy) {
                     serviceName = ""
                     createAttempted = false
-                    feedback = null
-                    failed = false
+                    clearFeedback()
                     creating = true
-                },
-                enabled = !busy,
-                modifier = Modifier.testTag("aliases-create"),
-            ) { Text("Create demo alias") }
-        }
-        feedback?.let {
-            Text(
-                it,
-                color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-                    .testTag("aliases-feedback"),
-            )
-        }
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            label = { Text("Search aliases") },
-            supportingText = { Text("Search website, service, or alias address") },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth().testTag("aliases-search"),
+                }
+            },
+            icon = { ToolIcon("add", tint = colors.onSecondary) },
+            text = { Text("Create demo alias", style = ToolsType.label) },
+            shape = RoundedCornerShape(28.dp),
+            containerColor = colors.secondary,
+            contentColor = colors.onSecondary,
+            modifier = Modifier.align(Alignment.BottomEnd).padding(16.dp)
+                .testTag("aliases-create").semantics { if (busy) disabled() },
         )
-        val filtered = filterAliases(aliases, query)
-        Text("Saved aliases (${filtered.size})", style = MaterialTheme.typography.titleLarge)
-        if (aliases.isEmpty()) {
-            EmptyToolState("No aliases yet", "Create a demo alias for a website or service to see it here.")
-        } else if (filtered.isEmpty()) {
-            EmptyToolState("No matching aliases", "Try a different service name or email address.")
-        } else {
-            filtered.forEach { alias ->
-                AliasCard(
-                    alias = alias,
-                    busy = busy,
-                    onCopy = { copy(alias) },
-                    onToggle = { active ->
-                        perform(if (active) "Demo alias enabled." else "Demo alias disabled.") {
-                            repository.setActive(alias.id, active)
-                        }
-                    },
-                    onDetails = {
-                        feedback = null
-                        failed = false
-                        detailId = alias.id
-                    },
-                    onDelete = {
-                        feedback = null
-                        failed = false
-                        deleteId = alias.id
-                    },
-                )
-            }
-        }
     }
 
     if (creating) {
         val error = aliasServiceError(serviceName)
-        AlertDialog(
-            onDismissRequest = { if (!busy) creating = false },
-            title = { Text("Create demo alias") },
-            text = {
-                Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text("Save a local record for a website or service. Email forwarding is not enabled.")
-                    OutlinedTextField(
-                        value = serviceName,
-                        onValueChange = { serviceName = it },
-                        label = { Text("Website or service") },
-                        singleLine = true,
-                        isError = createAttempted && error != null,
-                        supportingText = {
-                            if (createAttempted && error != null) Text(error)
-                            else Text("For example: Student portal")
-                        },
-                        enabled = !busy,
-                        modifier = Modifier.fillMaxWidth().testTag("aliases-service"),
-                    )
-                    if (failed) AliasDialogFeedback(feedback, true)
-                }
-            },
+        ToolDialog(
+            title = "Create demo alias",
+            onDismiss = { if (!busy) creating = false },
             confirmButton = {
-                TextButton(
+                ToolActionButton(
+                    text = "Create record",
                     enabled = !busy,
                     modifier = Modifier.testTag("aliases-confirm-create"),
+                    icon = "add",
                     onClick = {
                         createAttempted = true
                         if (error == null) {
@@ -194,52 +211,59 @@ internal fun AliasesFeature(repository: AliasesRepository) {
                             }
                         }
                     },
-                ) { Text("Create record") }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { creating = false }, enabled = !busy) { Text("Cancel") }
+                ToolActionButton("Cancel", { creating = false }, enabled = !busy, kind = ToolButtonKind.TEXT)
             },
-        )
+        ) {
+            Text("Save a local record for a website or service. Email forwarding is not enabled.", style = ToolsType.body)
+            ToolTextField(
+                value = serviceName,
+                onValueChange = { serviceName = it },
+                label = "Website or service",
+                isError = createAttempted && error != null,
+                supportingText = if (createAttempted && error != null) error else "For example: Student portal",
+                enabled = !busy,
+                leadingIcon = "mail",
+                modifier = Modifier.testTag("aliases-service"),
+            )
+            if (failed) AliasDialogFeedback(feedback, true)
+        }
     }
 
     aliases.firstOrNull { it.id == detailId }?.let { alias ->
-        AlertDialog(
-            onDismissRequest = { detailId = null },
-            title = { Text("Alias details") },
-            text = {
-                Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    Text(alias.serviceName, style = MaterialTheme.typography.titleMedium)
-                    Text(alias.aliasAddress)
-                    Text("Created ${formatToolTimestamp(alias.createdAtEpochMs)}")
-                    Text(if (alias.isActive) "Active local record" else "Disabled local record")
-                    Text("Demo address — email forwarding is not enabled.")
-                    AliasDialogFeedback(feedback, failed)
-                }
+        ToolDialog(
+            title = "Alias details",
+            onDismiss = { detailId = null },
+            confirmButton = {
+                ToolActionButton("Close", { detailId = null }, kind = ToolButtonKind.TEXT)
             },
-            confirmButton = { TextButton(onClick = { detailId = null }) { Text("Close") } },
-            dismissButton = { TextButton(onClick = { copy(alias) }) { Text("Copy alias") } },
-        )
+            dismissButton = {
+                ToolActionButton("Copy alias", { copy(alias) }, icon = "copy", kind = ToolButtonKind.TONAL)
+            },
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                ToolIconTile("mail")
+                Text(alias.serviceName, style = ToolsType.title, color = colors.onSurface)
+            }
+            Text(alias.aliasAddress, style = ToolsType.bodyLarge, color = colors.onSurface)
+            AliasStatus(alias.isActive)
+            AliasMetadata("schedule", "Created ${formatToolTimestamp(alias.createdAtEpochMs)}")
+            Text("Demo address — email forwarding is not enabled.", style = ToolsType.body)
+            AliasDialogFeedback(feedback, failed)
+        }
     }
 
     aliases.firstOrNull { it.id == deleteId }?.let { alias ->
-        AlertDialog(
-            onDismissRequest = { if (!busy) deleteId = null },
-            title = { Text("Delete alias?") },
-            text = {
-                Column(
-                    modifier = Modifier.verticalScroll(rememberScrollState()),
-                    verticalArrangement = Arrangement.spacedBy(12.dp),
-                ) {
-                    Text("Remove the local demo alias for ${alias.serviceName}? This cannot be undone.")
-                    if (failed) AliasDialogFeedback(feedback, true)
-                }
-            },
+        ToolDialog(
+            title = "Delete alias?",
+            onDismiss = { if (!busy) deleteId = null },
             confirmButton = {
-                TextButton(
+                ToolActionButton(
+                    text = "Delete",
                     enabled = !busy,
+                    icon = "delete",
                     modifier = Modifier.testTag("aliases-confirm-delete"),
                     onClick = {
                         perform("Demo alias deleted.") {
@@ -248,12 +272,16 @@ internal fun AliasesFeature(repository: AliasesRepository) {
                             if (detailId == alias.id) detailId = null
                         }
                     },
-                ) { Text("Delete") }
+                )
             },
             dismissButton = {
-                TextButton(onClick = { deleteId = null }, enabled = !busy) { Text("Cancel") }
+                ToolActionButton("Cancel", { deleteId = null }, enabled = !busy, kind = ToolButtonKind.TEXT)
             },
-        )
+        ) {
+            ToolIconTile("delete")
+            Text("Remove the local demo alias for ${alias.serviceName}? This cannot be undone.", style = ToolsType.body)
+            if (failed) AliasDialogFeedback(feedback, true)
+        }
     }
 }
 
@@ -267,19 +295,44 @@ private fun AliasCard(
     onDetails: () -> Unit,
     onDelete: () -> Unit,
 ) {
-    ToolCard {
-        Text(alias.serviceName, style = MaterialTheme.typography.titleMedium)
-        Text(alias.aliasAddress, style = MaterialTheme.typography.bodyLarge)
-        Text("Created ${formatToolTimestamp(alias.createdAtEpochMs)}", style = MaterialTheme.typography.bodySmall)
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.fillMaxWidth()) {
-            Text(
-                if (alias.isActive) "Active local record" else "Disabled local record",
-                modifier = Modifier.weight(1f),
-            )
+    val colors = MaterialTheme.colorScheme
+    ToolCard(onClick = onDetails) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            ToolIconTile("mail")
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(alias.serviceName, style = ToolsType.title, color = colors.onSurface)
+                Text("Demo email alias", style = ToolsType.caption, color = colors.onSurfaceVariant)
+            }
+            IconButton(
+                onClick = onCopy,
+                modifier = Modifier.size(48.dp).testTag("alias-copy-${alias.id}")
+                    .semantics { contentDescription = "Copy alias for ${alias.serviceName}" },
+            ) { ToolIcon("copy", tint = colors.primary) }
+        }
+        Text(alias.aliasAddress, style = ToolsType.bodyLarge, color = colors.onSurface)
+        AliasMetadata("schedule", "Created ${formatToolTimestamp(alias.createdAtEpochMs)}")
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier.fillMaxWidth().animateContentSize(tween(150)),
+        ) {
+            Box(Modifier.weight(1f)) { AliasStatus(alias.isActive) }
             Switch(
                 checked = alias.isActive,
                 onCheckedChange = onToggle,
                 enabled = !busy,
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = colors.onPrimary,
+                    checkedTrackColor = colors.primary,
+                    checkedBorderColor = colors.primary,
+                    uncheckedThumbColor = colors.onSurfaceVariant,
+                    uncheckedTrackColor = colors.surfaceVariant,
+                    uncheckedBorderColor = colors.outline,
+                ),
                 modifier = Modifier.semantics { contentDescription = "Enable alias for ${alias.serviceName}" }
                     .testTag("alias-toggle-${alias.id}"),
             )
@@ -288,27 +341,54 @@ private fun AliasCard(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            OutlinedButton(onClick = onCopy, modifier = Modifier.testTag("alias-copy-${alias.id}")) {
-                Text("Copy")
-            }
-            OutlinedButton(onClick = onDetails, modifier = Modifier.testTag("alias-details-${alias.id}")) {
-                Text("Details")
-            }
-            TextButton(onClick = onDelete, enabled = !busy, modifier = Modifier.testTag("alias-delete-${alias.id}")) {
-                Text("Delete")
-            }
+            ToolActionButton(
+                "Details", onDetails, icon = "info", kind = ToolButtonKind.TONAL,
+                modifier = Modifier.testTag("alias-details-${alias.id}"),
+            )
+            ToolActionButton(
+                "Delete", onDelete, enabled = !busy, icon = "delete", kind = ToolButtonKind.TEXT,
+                modifier = Modifier.testTag("alias-delete-${alias.id}"),
+            )
         }
     }
 }
 
 @Composable
+private fun AliasStatus(active: Boolean) {
+    val colors = MaterialTheme.colorScheme
+    val container by animateColorAsState(
+        if (active) colors.primaryContainer else colors.surfaceVariant,
+        tween(150), label = "aliasStatusContainer",
+    )
+    val content by animateColorAsState(
+        if (active) colors.onPrimaryContainer else colors.onSurfaceVariant,
+        tween(150), label = "aliasStatusContent",
+    )
+    Surface(shape = CircleShape, color = container, contentColor = content) {
+        Row(
+            Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            ToolIcon(if (active) "check_circle" else "pause", tint = content, size = 18.dp, filled = active)
+            Text(if (active) "Active local record" else "Disabled local record", style = ToolsType.caption)
+        }
+    }
+}
+
+@Composable
+private fun AliasMetadata(icon: String, text: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        ToolIcon(icon, size = 18.dp)
+        Text(text, style = ToolsType.caption, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+@Composable
 private fun AliasDialogFeedback(feedback: String?, failed: Boolean) {
-    feedback?.let {
-        Text(
-            it,
-            color = if (failed) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.primary,
-            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
-                .testTag("aliases-dialog-feedback"),
-        )
+    feedback?.let { message ->
+        Box(Modifier.testTag("aliases-dialog-feedback")) {
+            ToolFeedback(message, isError = failed)
+        }
     }
 }

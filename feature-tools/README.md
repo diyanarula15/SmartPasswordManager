@@ -13,23 +13,25 @@ Copy `feature-tools/` into the Android project. In `settings.gradle.kts`:
 include(":feature-tools")
 ```
 
-The root build must supply these plugins (or compatible versions matching the app):
+The production build file follows Developer 1's current version catalog:
+`libs.plugins.android.library` and `libs.plugins.kotlin.compose`. The main project
+currently uses AGP 9.5.1, Gradle 9.6.0, Compose compiler plugin 2.2.10 and SDK 37.
+AGP 9 supplies Kotlin itself; do not add a competing Kotlin Android plugin.
+Keep the existing application catalog aliases and plugin setup when integrating.
+Repositories are `google()` and `mavenCentral()`.
 
-```kotlin
-plugins {
-    id("com.android.library") version "8.7.3" apply false
-    id("org.jetbrains.kotlin.android") version "2.0.21" apply false
-    id("org.jetbrains.kotlin.plugin.compose") version "2.0.21" apply false
-}
-```
-
-Repositories: `google()` and `mavenCentral()`. Build with JDK 17, Gradle 8.10.2,
-Android SDK 35. The app adds `implementation(project(":feature-tools"))` and its
-existing Compose/Material dependencies. This module's dependency list is in
+The app adds `implementation(project(":feature-tools"))` and its existing
+Compose/Material dependencies. This module's dependency list is in
 `build.gradle.kts`: Compose BOM 2024.12.01, Material 3, Foundation, UI,
 lifecycle-runtime-compose and lifecycle-viewmodel-ktx 2.8.7, coroutines-core/Android 1.9.0.
 Coroutines core is an API dependency because the public contracts expose Flow/StateFlow.
 JUnit and Android Compose test dependencies are test-only.
+
+For independent verification, the separate `verification/` harness uses an isolated
+AGP 8.7.3 / Kotlin 2.0.21 / Gradle 8.10.2 / SDK 35 build script for the **same real
+module source directory**. `verification/settings.gradle.kts` selects that script
+with `buildFileName`; it never replaces the production build file or copies/mock-
+implements feature code. This keeps testing independent of main-app setup.
 
 Call these exact public functions from the host's existing navigation:
 
@@ -56,14 +58,10 @@ val tools = ToolsDependencies(
     settings = hostSettingsRepository,
 )
 
-// Inside the app's composition:
+// Inside the existing host application's MaterialTheme:
 ProvideTools(tools) {
-    // Optional: applies theme preference immediately. Or observe the same
-    // repository from the existing app theme instead.
-    LegenDDRRYToolsTheme {
-        // Existing app navigation invokes one of the four routes.
-        SettingsRoute()
-    }
+    // Existing app navigation invokes one of the four routes.
+    SettingsRoute()
 }
 ```
 
@@ -96,9 +94,44 @@ There is no extra vault database or independently invented health score.
 
 `ToolPreferences` defaults: SYSTEM theme, auto-lock 5 minutes, clipboard clearing
 30 seconds, show passwords false. Durations are positive integers; custom injected
-durations are supported by the settings UI. Theme controls work immediately when
-the host uses the wrapper or observes preferences in its own theme. The host must
+durations are supported by the settings UI. Theme controls update preferences immediately. The host must observe those
+preferences in its existing theme; the isolated verification app demonstrates this. The host must
 actually implement auto-lock, clipboard clearing, and vault password visibility.
+
+## Sage & Clay styling and host theme ownership
+
+The production module installs **no MaterialTheme** and contains **no palette hex
+values**. All screen colours use `MaterialTheme.colorScheme` semantic roles. The
+application must supply the guide's Sage & Clay light/dark palette in its existing
+app theme, with dynamic colour disabled. No startup animation or global navigation
+is added by this module.
+
+`LegenDDRRYToolsTheme` keeps its old signature for source compatibility but is now a
+**deprecated pass-through**. It intentionally does not override app colours or apply
+a theme preference. Replace calls with the existing host app theme, and collect
+`tools.settings.preferences` there to apply light/dark/system mode. The complete
+reference palettes live only in the isolated preview/test files:
+
+- `src/androidTest/java/com/legenddrry/feature/tools/preview/SageClayPreviewTheme.kt`
+- `verification/app/src/main/java/com/legenddrry/tools/demo/preview/SageClayPreviewTheme.kt` (separate harness)
+
+Required semantic roles: `primary` sage, `primaryContainer` mist,
+`secondary` clay, `secondaryContainer` clay blush, `background` ground,
+`surface` cards, `surfaceVariant` sunken fields, `onSurfaceVariant` muted text,
+and `error/errorContainer` status red. Supply their matching `on*` colours. Clay
+is reserved for one focal element per screen. Tonal buttons explicitly use sage
+`primaryContainer`, because Material 3's default tonal secondary colour is clay.
+
+Manrope 400/500/600/700 and a small subset of genuine Material Symbols Rounded are
+bundled offline, with licenses in `src/main/assets/font-licenses/`. No downloadable
+font service, new network permission, or extra runtime dependency is needed.
+`components.ToolsType` exposes the guide's text styles (and optional
+`materialTypography` value for the host); it does not create a theme.
+
+Shared UI: 20dp cards/dialogs, 14dp fields, 28dp hero/FAB, pill-shaped 52dp action buttons,
+48dp minimum interactive targets, 16dp phone/24dp tablet page margins, 12dp card gaps,
+24dp section gaps. Colour/status selection animates for 150ms; local dialog content for 275ms.
+Cards open their details with ripple, and nested actions remain independent.
 
 ## In-memory implementations
 
@@ -134,7 +167,8 @@ With an API 26+ emulator/device:
 `src/androidTest` exercises the exact public routes with injected local repositories:
 approval creation/decisions/expiry/history, alias validation/search/clipboard/toggle/
 details/confirmed deletion, dashboard loading/live/empty/error/retry, settings/theme,
-and repeated route switching. JVM tests cover data invariants and concurrent writes.
+and repeated route switching. Three additional mutation-failure/retry checks protect error states.
+A gallery test captures and validates all four screens plus local dialogs/history in light and dark mode. JVM tests cover data invariants and concurrent writes.
 
 The independent verification app is kept separately in the workspace's ignored
 `verification/` directory; it is not part of this library or the main application.

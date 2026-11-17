@@ -1,70 +1,107 @@
-# Verification record — 17 November 2026
+# Sage & Clay verification — 17 November 2026
 
-All four routes compiled and their interactive workflows were exercised on Android
-API 35. All production source is inside `feature-tools/`. The standalone Android
-application remains separately in the ignored `verification/` directory and is
-excluded from the integration source archive.
+All four redesigned production routes were compiled and exercised independently
+using a separate Android test app. No main app, authentication, vault, or generator
+source was changed.
 
-Environment: JDK 17, Gradle 8.10.2, AGP 8.7.3, Kotlin 2.0.21, SDK 35, min SDK 26.
-The local SDK was `/opt/homebrew/share/android-commandlinetools`.
+Environment: JDK 17, Gradle 8.10.2, AGP 8.7.3, Kotlin 2.0.21, Compose BOM 2024.12.01,
+compile SDK 35, min SDK 26. Device: dedicated API 35 emulator, 540×1200 at 210dpi.
 
-## Executed checks
+## Final executed results
 
 | Check | Result |
 | --- | --- |
-| Agent-owned independent Kotlin/JUnit runs | Approvals 18, aliases 10, settings/security 17 passed |
-| Integrated `:feature-tools:testDebugUnitTest` | 45 tests; zero failures/errors/skips |
-| `:app:assembleDebug` | Passed; standalone demo APK generated |
-| `:feature-tools:assembleDebugAndroidTest` | Passed |
-| `:feature-tools:connectedDebugAndroidTest` | 7 tests; zero failures/errors/skips |
-| `:app:connectedDebugAndroidTest` | 1 test; zero failures/errors/skips |
-| `:feature-tools:lintDebug` | Passed: zero errors, 4 dependency-version advisories |
-| `:feature-tools:assembleRelease` | Passed; release AAR generated |
-| Final configuration/build check | Passed after moving test target SDK into `testOptions` |
+| Agent-owned Kotlin/JUnit regressions | Approvals 18, aliases 10, settings/security 17 passed |
+| Integrated unit regressions | 45 tests, 0 failures/errors/skips |
+| Redesigned feature/device suite | 11 tests, 0 failures/errors/skips |
+| Standalone launcher workflow | 1 test, 0 failures/errors/skips |
+| Standalone debug APK | Built and packaged |
+| Release library AAR | Built on both standalone and current production toolchains |
+| Android lint | 0 errors, 16 advisories |
+| Light/dark gallery | 16 genuine emulator PNGs generated and signature-validated by the test |
+| Exact rendered ground tokens | All four light screenshots match #F3F4EC; all four dark screenshots match #121814 at the sampled background pixel |
+| Contract/static review | Four routes and repository contracts unchanged; no production palette constants or MaterialTheme installation |
 
-The dependency advisories concern newer lifecycle and Android test library versions.
-The tested versions remain pinned for reproducibility and host compatibility.
+**57 automated tests passed.** Existing functional assertions were retained; only
+intentional sentence-case copy expectations and the test host's theme changed.
+New checks cover mutation failures/retry in approvals, aliases and settings.
 
-The first device run found the library test APK's implicit legacy target SDK caused
-Android to show a system dialog, stealing focus and denying clipboard reads. The
-module now explicitly sets `testOptions.targetSdk = 35`, and the clipboard test waits
-for activity window focus before reading the real OS clipboard. The final seven-test
-feature suite passed, including clipboard readback. No clipboard mock was substituted.
+Lint advisories: 4 newer dependency versions and 12 version-catalog suggestions.
+Dependencies remain explicit and self-contained so the module can integrate without
+assuming Developer1's catalog aliases. No warnings indicate a runtime/resource/API
+error.
 
-## Coverage
+Developer 1 subsequently migrated the production build file to AGP 9.5.1 / Gradle
+9.6.0 / SDK 37 and the main app version catalog. That setup was preserved. The
+standalone harness now explicitly selects its own pinned build script for the same
+real source directory; its APK/AAR assembly has also passed after that adaptation.
+Host validation also passed against the current production configuration:
+`compileDebugKotlin` and 45 unit tests succeeded in 1m 31s; `assembleRelease` succeeded
+in 45s. These tasks used a scratch project cache/output directory via an init script,
+so no other developer's app/core/vault build outputs were modified.
 
-- Approvals: demo creation, approve, deny, expiry, repeated-transition prevention,
-  pending/history changes, request details, concurrency and unique identities.
-- Aliases: validation, creation, search, real Android clipboard copying, enable/disable,
-  details, cancel/confirm deletion, empty lists and duplicate-ID prevention.
-- Dashboard: loading, empty counts, live provider updates, exact counts, provider
-  error/retry and recommendations. No stored password is displayed or logged.
-- Settings: defaults, every preference, light/dark/system selection, actual theme color
-  changes, information dialogs, atomic updates and custom injected duration values.
-- Host app: launch, all four public routes, repeated navigation, theme propagation,
-  and shared session data retained across route changes.
+## What was exercised
+
+- Approvals: demo creation, approve/deny, repeated-transition protection, expiration,
+  history, details, error feedback/recovery, concurrent repository writes.
+- Aliases: validation, create/search, real OS clipboard write/readback, enable/disable,
+  details, cancellation/confirmation of deletion, empty state, failed create/retry,
+  unique identities and the form's Done keyboard action.
+- Dashboard: loading, empty values, exact counts, live updates, provider error/retry,
+  recommendations and no unsupported breach claims.
+- Settings: defaults, every preference, actual light/dark/system theme changes,
+  save failure/recovery and information dialogs.
+- Navigation: all four public routes, retained session data across route switches,
+  actual standalone launcher and appearance changes.
+
+The gallery renders the production routes inside a test-only theme using the guide's
+exact palettes. It captures four screens, approval details/history and alias
+create/details in both appearances. These are original emulator captures; no image
+recolouring, compositing or generated mockups were used. Gallery setup clears the
+previous clipboard test's system overlay and uses the field's real Done action.
+
+Visual review caught Material 3's default tonal-button use of secondary colours; the
+shared buttons now explicitly use sage primary-container roles, preserving one clay
+focal element per screen. Shared fields explicitly expose working Done/Search actions.
 
 ## Reproduce
 
-From the USS workspace, with the separate harness present:
+Unpack the separate verification harness alongside `feature-tools/`:
 
 ```sh
 export JAVA_HOME=/path/to/jdk17
 export ANDROID_HOME=/path/to/Android/sdk
-export ANDROID_SERIAL=emulator-5554 # Choose the intended device explicitly.
+export ANDROID_SERIAL=emulator-5570
 ./verification/gradlew -p verification :feature-tools:testDebugUnitTest :app:assembleDebug
-./verification/gradlew -p verification :feature-tools:connectedDebugAndroidTest :app:connectedDebugAndroidTest
+./verification/gradlew -p verification :feature-tools:connectedDebugAndroidTest :app:connectedDebugAndroidTest \
+  -Pandroid.injected.device.serial=emulator-5570
 ./verification/gradlew -p verification :feature-tools:lintDebug :feature-tools:assembleRelease
 ```
 
-Local executed build logs and reports are packaged under `artifacts/tools/`. The
-independent harness is packaged separately; unpack it alongside `feature-tools/`
-and set `ANDROID_HOME` (or create its own untracked `local.properties`).
+The final combined executed command included unit tests, both device tasks, lint,
+and the release AAR. It completed successfully in 1m 31s. Detailed logs, reports,
+source/harness archives, APK/AAR and the gallery are in `artifacts/tools-sage-clay/`.
 
-The device-test task uninstalls its test applications on completion. To explore
-manually, install the debug APK again. Use a separate emulator per developer to avoid
-foreground-window and resource contention during simultaneous manual checks.
+The production module always inherits the host theme. Reference palettes are only
+in test/preview sources. See `DESIGN_NOTES.md` for changed files and the legacy theme
+helper's source-compatible migration.
 
-Only the library and its documented repository interfaces are intended for the main
-application. Main authentication, encryption/storage, vault CRUD, and global navigation
-remain under their existing developers' ownership.
+
+Current host-toolchain commands (read production configuration; isolate outputs):
+
+```sh
+JAVA_HOME=/path/to/jdk21 bash ./gradlew :feature-tools:compileDebugKotlin :feature-tools:testDebugUnitTest \
+  --no-configuration-cache --max-workers=2 \
+  --project-cache-dir /tmp/legenddrry-tools-host-check/project-cache \
+  -I /tmp/legenddrry-tools-host-check.init.gradle
+JAVA_HOME=/path/to/jdk21 bash ./gradlew :feature-tools:assembleRelease \
+  --no-configuration-cache --max-workers=2 \
+  --project-cache-dir /tmp/legenddrry-tools-host-check/project-cache \
+  -I /tmp/legenddrry-tools-host-check.init.gradle
+```
+
+The scratch init script only redirects `:feature-tools`'s buildDirectory to
+`/tmp/legenddrry-tools-host-check/build`. The main project's daemon toolchain criteria
+select its configured JDK; no host app source or global build configuration is changed.
+The current-toolchain AAR is included in the delivery, alongside the independently
+runnable SDK 35 demo APK and harness.

@@ -23,8 +23,9 @@ and seed records for deterministic expiration tests. In-memory mutations should 
 atomic/thread-safe. Use immutable lists and StateFlow, UUID IDs, no network.
 Settings/security counts can be fake only when clearly labeled demo.
 
-Root will supply `ToolsDependencies`, `ProvideTools`, `LegenDDRRYToolsTheme` and
-zero-argument public routes. Feature UI uses MaterialTheme and shared ToolPage,
+Root supplies `ToolsDependencies`, `ProvideTools` and zero-argument public routes.
+The application owns MaterialTheme. The legacy `LegenDDRRYToolsTheme` signature remains
+as a deprecated pass-through; palette/theme application is isolated to test/preview code. Feature UI uses MaterialTheme and shared ToolPage,
 ToolCard, EmptyToolState, formatToolTimestamp. No global navigation in features.
 
 Use Compose runtime StateFlow collection (`collectAsStateWithLifecycle`),

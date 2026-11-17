@@ -2,6 +2,7 @@ package com.legenddrry.feature.tools
 
 import android.content.ClipboardManager
 import android.content.Context
+import com.legenddrry.feature.tools.preview.SageClayPreviewTheme
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
@@ -32,7 +33,7 @@ class FeatureRoutesTest {
     private fun show(dependencies: ToolsDependencies = ToolsDependencies.demo(), content: @Composable () -> Unit) {
         compose.setContent {
             ProvideTools(dependencies) {
-                LegenDDRRYToolsTheme {
+                SageClayPreviewTheme {
                     Surface { content() }
                 }
             }
@@ -197,7 +198,7 @@ class FeatureRoutesTest {
         compose.waitUntil(timeoutMillis = 10_000) { dependencies.approvals.requests.value.size == 1 }
         repeat(3) {
             compose.runOnIdle { section.intValue = 1 }
-            compose.onNodeWithText("Hide My Email").assertExists()
+            compose.onNodeWithText("Hide my email").assertExists()
             compose.runOnIdle { section.intValue = 2 }
             compose.onNodeWithText("Security dashboard").assertExists()
             compose.runOnIdle { section.intValue = 3 }
@@ -206,4 +207,61 @@ class FeatureRoutesTest {
             compose.onNodeWithText("Pending requests (1)").assertExists()
         }
     }
+    @Test fun approvalMutationFailureIsVisibleAndRecoveryWorks() {
+        val base = ToolsDependencies.demo()
+        var fail = true
+        val repository = object : ApprovalsRepository by base.approvals {
+            override suspend fun createDemoRequest(): LoginRequest {
+                if (fail) throw IllegalStateException("Couldn't create this demo request. Try again.")
+                return base.approvals.createDemoRequest()
+            }
+        }
+        show(base.copy(approvals = repository)) { ApprovalsRoute() }
+        compose.onNodeWithTag("create_demo_request").performClick()
+        compose.onNodeWithText("Couldn't create this demo request. Try again.").assertExists()
+        compose.runOnIdle { assertTrue(repository.requests.value.isEmpty()); fail = false }
+        compose.onNodeWithTag("create_demo_request").performScrollTo().performClick()
+        compose.waitUntil(timeoutMillis = 10_000) { repository.requests.value.size == 1 }
+        compose.onNodeWithText("Couldn't create this demo request. Try again.").assertDoesNotExist()
+    }
+
+    @Test fun aliasCreateFailureStaysVisibleInsideDialogAndCanRetry() {
+        val base = ToolsDependencies.demo()
+        var fail = true
+        val repository = object : AliasesRepository by base.aliases {
+            override suspend fun create(serviceName: String): EmailAlias {
+                if (fail) throw IllegalStateException("Couldn't save this alias. Try again.")
+                return base.aliases.create(serviceName)
+            }
+        }
+        show(base.copy(aliases = repository)) { AliasesRoute() }
+        compose.onNodeWithTag("aliases-create").performClick()
+        compose.onNodeWithTag("aliases-service").performTextInput("Campus library")
+        compose.onNodeWithTag("aliases-confirm-create").performClick()
+        compose.onNodeWithTag("aliases-dialog-feedback").assertExists()
+        compose.onNode(hasText("Couldn't save this alias. Try again.") and hasAnyAncestor(hasTestTag("aliases-dialog-feedback"))).assertIsDisplayed()
+        compose.runOnIdle { assertTrue(repository.aliases.value.isEmpty()); fail = false }
+        compose.onNodeWithTag("aliases-confirm-create").performClick()
+        compose.waitUntil(timeoutMillis = 10_000) { repository.aliases.value.size == 1 }
+        compose.onNodeWithTag("aliases-service").assertDoesNotExist()
+    }
+
+    @Test fun settingsSaveFailurePreservesValuesAndCanRetry() {
+        val base = ToolsDependencies.demo()
+        var fail = true
+        val repository = object : SettingsRepository by base.settings {
+            override suspend fun setThemeMode(mode: ThemeMode) {
+                if (fail) throw IllegalStateException("Couldn't save this appearance. Try again.")
+                base.settings.setThemeMode(mode)
+            }
+        }
+        show(base.copy(settings = repository)) { SettingsRoute() }
+        compose.onNodeWithTag("theme_dark").performClick()
+        compose.onNodeWithTag("settings_error").assertExists()
+        compose.runOnIdle { assertEquals(ThemeMode.SYSTEM, repository.preferences.value.themeMode); fail = false }
+        compose.onNodeWithTag("theme_dark").performClick()
+        compose.waitUntil(timeoutMillis = 10_000) { repository.preferences.value.themeMode == ThemeMode.DARK }
+        compose.onNodeWithTag("settings_error").assertDoesNotExist()
+    }
+
 }

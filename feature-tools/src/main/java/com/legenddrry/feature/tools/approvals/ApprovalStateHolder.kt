@@ -17,6 +17,8 @@ internal class ApprovalStateHolder(
     val busy = mutableBusy.asStateFlow()
     private val mutableFeedback = MutableStateFlow<String?>(null)
     val feedback = mutableFeedback.asStateFlow()
+    private val mutableFeedbackIsError = MutableStateFlow(false)
+    val feedbackIsError = mutableFeedbackIsError.asStateFlow()
 
     fun createDemoRequest() = perform("Demo login request created locally.") {
         repository.createDemoRequest()
@@ -33,7 +35,10 @@ internal class ApprovalStateHolder(
             "Demo request denied locally." else "Login request denied.",
     ) { repository.deny(id) }
 
-    fun dismissFeedback() { mutableFeedback.value = null }
+    fun dismissFeedback() {
+        mutableFeedback.value = null
+        mutableFeedbackIsError.value = false
+    }
 
     suspend fun refreshExpirations() {
         try {
@@ -41,6 +46,7 @@ internal class ApprovalStateHolder(
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
+            mutableFeedbackIsError.value = true
             mutableFeedback.value = error.message ?: "Could not refresh login request statuses."
         }
     }
@@ -50,10 +56,12 @@ internal class ApprovalStateHolder(
         scope.launch {
             try {
                 action()
+                mutableFeedbackIsError.value = false
                 mutableFeedback.value = success
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
+                mutableFeedbackIsError.value = true
                 mutableFeedback.value = error.message ?: "Could not update the login request. Try again."
             } finally {
                 mutableBusy.value = false

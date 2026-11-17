@@ -1,15 +1,8 @@
 package com.legenddrry.feature.tools
 
-import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.staticCompositionLocalOf
-import androidx.compose.ui.graphics.Color
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.legenddrry.feature.tools.aliases.InMemoryAliasesRepository
 import com.legenddrry.feature.tools.approvals.InMemoryApprovalsRepository
 import com.legenddrry.feature.tools.contracts.*
@@ -40,22 +33,17 @@ fun ProvideTools(dependencies: ToolsDependencies, content: @Composable () -> Uni
     CompositionLocalProvider(LocalToolsDependencies provides dependencies, content = content)
 }
 
-/** Optional host theme wrapper. Observes appearance preferences immediately. */
+/**
+ * Source-compatible legacy helper. The application owns its MaterialTheme.
+ * Observe SettingsRepository.preferences in the host theme; the verification app
+ * supplies an isolated Sage & Clay preview theme. No app palette is installed here.
+ */
+@Deprecated("The host application owns MaterialTheme. Use ProvideTools and observe settings in the host theme.")
 @Composable
 fun LegenDDRRYToolsTheme(
     repository: SettingsRepository = LocalToolsDependencies.current.settings,
     content: @Composable () -> Unit,
 ) {
-    val preferences by repository.preferences.collectAsStateWithLifecycle()
-    val dark = when (preferences.themeMode) {
-        ThemeMode.SYSTEM -> isSystemInDarkTheme()
-        ThemeMode.LIGHT -> false
-        ThemeMode.DARK -> true
-    }
-    MaterialTheme(
-        colorScheme = if (dark) darkColorScheme() else lightColorScheme(
-            primary = Color(0xFF3C568A), secondary = Color(0xFF565E71),
-        ),
-        content = content,
-    )
+    // Keep the signature for existing callers; never override the host colour scheme.
+    content()
 }
