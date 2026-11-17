@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Dark window colours (Sage & Clay dark background) so there is no light flash at launch. -->
+    <style name="Theme.SmartPasswordManager" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#FF121814</item>
+        <item name="android:colorBackground">#FF121814</item>
+        <item name="android:colorPrimary">#FF9CBBA3</item>
+        <item name="android:colorAccent">#FF9CBBA3</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>

@@ -1,5 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-
-    <style name="Theme.SmartPasswordManager" parent="android:Theme.Material.Light.NoActionBar" />
+    <!--
+        Window colours match the Sage & Clay Compose background so there is no white flash
+        before the first frame. Dark variant: values-night/themes.xml.
+    -->
+    <style name="Theme.SmartPasswordManager" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">#FFF3F4EC</item>
+        <item name="android:colorBackground">#FFF3F4EC</item>
+        <item name="android:colorPrimary">#FF4A6651</item>
+        <item name="android:colorAccent">#FF4A6651</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+    </style>
 </resources>
