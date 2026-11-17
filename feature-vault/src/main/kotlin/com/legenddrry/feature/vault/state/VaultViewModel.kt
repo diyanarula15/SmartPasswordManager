@@ -1,4 +1,4 @@
-// OWNER: worker "state". LOCKED API — keep public signatures. (Skeleton stub; replace body.)
+// OWNER: worker "state". LOCKED API — keep public signatures.
 package com.legenddrry.feature.vault.state
 
 import androidx.lifecycle.ViewModel
@@ -12,6 +12,9 @@ import com.legenddrry.feature.vault.model.filterEntries
 import com.legenddrry.feature.vault.model.findDuplicatePasswordIds
 import com.legenddrry.feature.vault.model.toEntry
 import com.legenddrry.feature.vault.model.validate
+import com.legenddrry.feature.vault.ui.common.VaultTestTags
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,19 +50,33 @@ class VaultViewModel(
     private val _uiState = MutableStateFlow(VaultUiState())
     val uiState: StateFlow<VaultUiState> = _uiState.asStateFlow()
 
+    private var collectJob: Job? = null
+
     init {
-        // STUB: no error handling / retry.
-        viewModelScope.launch {
-            repository.entries.collect { list ->
-                _uiState.update {
-                    it.copy(
-                        isLoading = false,
-                        entries = list,
-                        visibleEntries = filterEntries(list, it.query, it.selectedCategory),
-                        categories = categoriesFor(list),
-                        duplicatePasswordIds = findDuplicatePasswordIds(list),
-                    )
+        subscribe()
+    }
+
+    private fun subscribe() {
+        collectJob?.cancel()
+        _uiState.update { it.copy(isLoading = true, errorMessage = null) }
+        collectJob = viewModelScope.launch {
+            try {
+                repository.entries.collect { list ->
+                    _uiState.update {
+                        it.copy(
+                            isLoading = false,
+                            errorMessage = null,
+                            entries = list,
+                            visibleEntries = filterEntries(list, it.query, it.selectedCategory),
+                            categories = categoriesFor(list),
+                            duplicatePasswordIds = findDuplicatePasswordIds(list),
+                        )
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _uiState.update { it.copy(isLoading = false, errorMessage = MSG_LOAD_FAILED) }
             }
         }
     }
@@ -80,24 +97,55 @@ class VaultViewModel(
 
     /** Validates; adds when draft.id == null, else updates. Calls [onSaved] only on success. */
     fun save(draft: EntryDraft, onSaved: () -> Unit = {}) {
-        if (draft.validate().isNotEmpty()) return
+        val errors = draft.validate()
+        if (errors.isNotEmpty()) {
+            _uiState.update { it.copy(userMessage = errors.values.first()) }
+            return
+        }
         viewModelScope.launch {
-            val entry = draft.toEntry(newId(), clock())
-            if (draft.id == null) repository.add(entry) else repository.update(entry)
-            _uiState.update { it.copy(userMessage = "Entry saved") }
-            onSaved()
+            val ok = try {
+                if (draft.id == null) {
+                    repository.add(draft.toEntry(newId(), clock()))
+                } else {
+                    repository.update(draft.toEntry(draft.id, clock()))
+                }
+                true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                false
+            }
+            if (ok) {
+                _uiState.update { it.copy(userMessage = VaultTestTags.MSG_ENTRY_SAVED) }
+                onSaved()
+            } else {
+                _uiState.update { it.copy(userMessage = MSG_SAVE_FAILED) }
+            }
         }
     }
 
     fun delete(id: String) {
         viewModelScope.launch {
-            repository.delete(id)
-            _uiState.update { it.copy(userMessage = "Entry deleted") }
+            val message = try {
+                repository.delete(id)
+                VaultTestTags.MSG_ENTRY_DELETED
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                MSG_DELETE_FAILED
+            }
+            _uiState.update { it.copy(userMessage = message) }
         }
     }
 
     /** Re-subscribes to repository.entries after an error. */
-    fun retry() {}
+    fun retry() = subscribe()
 
     fun onUserMessageShown() = _uiState.update { it.copy(userMessage = null) }
+
+    companion object {
+        const val MSG_LOAD_FAILED = "Couldn't load your vault"
+        const val MSG_SAVE_FAILED = "Couldn't save entry"
+        const val MSG_DELETE_FAILED = "Couldn't delete entry"
+    }
 }
