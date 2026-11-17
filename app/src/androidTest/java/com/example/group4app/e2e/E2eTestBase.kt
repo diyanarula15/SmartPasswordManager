@@ -183,6 +183,7 @@ abstract class E2eTestBase {
         compose.typeInto(VaultTestTags.EDITOR_TITLE, title)
         compose.typeInto(VaultTestTags.EDITOR_USERNAME, username)
         compose.typeInto(VaultTestTags.EDITOR_PASSWORD, password)
+        compose.typeInto(VaultTestTags.EDITOR_NOTES, "Saved from test")
         compose.click(VaultTestTags.EDITOR_SAVE)
         compose.awaitTagGone(VaultTestTags.EDITOR)
         compose.await("repository to contain '$title'") { vaultEntries().any { it.title == title } }

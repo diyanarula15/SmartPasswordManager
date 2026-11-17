@@ -193,6 +193,7 @@ class GenerateRouteTest {
         rule.awaitTag(T.EDITOR)
         rule.awaitTag(T.EDITOR_PASSWORD)
         rule.node(T.EDITOR_TITLE).performTextInput("Generated Login")
+        rule.node(T.EDITOR_NOTES).performTextInput("Generated account")
         rule.click(T.EDITOR_SAVE)
 
         rule.await("repository.add to be called") { repo.addCalls.size == 1 }

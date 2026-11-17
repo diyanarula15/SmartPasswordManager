@@ -8,7 +8,7 @@ import org.junit.Test
 
 class EntryDraftTest {
 
-    private val valid = EntryDraft(title = "Mail", password = "secret")
+    private val valid = EntryDraft(title = "Mail", password = "secret", notes = "note")
 
     @Test fun validDraftHasNoErrors() = assertTrue(valid.validate().isEmpty())
 
@@ -40,6 +40,11 @@ class EntryDraftTest {
     @Test fun notesLengthLimit() {
         assertTrue(valid.copy(notes = "n".repeat(1000)).validate().isEmpty())
         assertTrue(DraftField.NOTES in valid.copy(notes = "n".repeat(1001)).validate())
+    }
+
+    @Test fun blankNotesAreInvalid() {
+        assertEquals("Notes are required", valid.copy(notes = "").validate()[DraftField.NOTES])
+        assertEquals("Notes are required", valid.copy(notes = "   ").validate()[DraftField.NOTES])
     }
 
     @Test fun websiteValidation() {

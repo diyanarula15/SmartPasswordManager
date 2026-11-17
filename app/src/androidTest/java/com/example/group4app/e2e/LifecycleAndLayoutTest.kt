@@ -94,6 +94,7 @@ class LifecycleAndLayoutTest : E2eTestBase() {
             compose.awaitTag(VaultTestTags.EDITOR, AUTH_WAIT_MS)
             assertEquals("Unsaved generated draft", compose.textOf(VaultTestTags.EDITOR_TITLE))
             assertEquals("generator@example.com", compose.textOf(VaultTestTags.EDITOR_USERNAME))
+            compose.typeInto(VaultTestTags.EDITOR_NOTES, "Generated draft note")
             compose.click(VaultTestTags.EDITOR_SAVE)
             compose.awaitTagGone(VaultTestTags.EDITOR)
             compose.await("generated draft to retain its original generated password") {

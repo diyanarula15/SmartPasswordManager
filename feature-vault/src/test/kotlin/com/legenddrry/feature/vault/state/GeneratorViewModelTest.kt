@@ -94,7 +94,7 @@ class GeneratorViewModelTest {
         val vm = vm()
         val pw = vm.uiState.value.password
         var saved = false
-        vm.saveAsEntry(EntryDraft(id = "e1", title = " Site ", password = pw), onSaved = { saved = true })
+        vm.saveAsEntry(EntryDraft(id = "e1", title = " Site ", password = pw, notes = "n"), onSaved = { saved = true })
         val added = repo.addCalls.single()
         assertEquals("fresh", added.id)
         assertEquals("Site", added.title)
@@ -121,7 +121,7 @@ class GeneratorViewModelTest {
         repo.failAdd = true
         val vm = vm()
         var saved = false
-        vm.saveAsEntry(EntryDraft(title = "T", password = "p"), onSaved = { saved = true })
+        vm.saveAsEntry(EntryDraft(title = "T", password = "p", notes = "n"), onSaved = { saved = true })
         assertEquals("Couldn't save entry", vm.uiState.value.userMessage)
         assertFalse(saved)
     }
@@ -130,7 +130,7 @@ class GeneratorViewModelTest {
         val gate = CompletableDeferred<Unit>()
         repo.addGate = gate
         val vm = vm()
-        val draft = EntryDraft(title = "Pending", password = "secret")
+        val draft = EntryDraft(title = "Pending", password = "secret", notes = "n")
         var saved = 0
         vm.saveAsEntry(draft) { saved++ }
         assertTrue(vm.uiState.value.isSaving)
@@ -144,7 +144,7 @@ class GeneratorViewModelTest {
 
     @Test fun failedSaveAndCancellationAllowRetry() = runTest {
         val vm = vm()
-        val draft = EntryDraft(title = "Retry", password = "secret")
+        val draft = EntryDraft(title = "Retry", password = "secret", notes = "n")
         repo.failAdd = true
         vm.saveAsEntry(draft)
         assertFalse(vm.uiState.value.isSaving)

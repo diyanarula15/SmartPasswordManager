@@ -36,8 +36,10 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -90,6 +92,8 @@ fun EntryEditorDialog(
         onDraftChange?.invoke(updated)
     }
     var saveAttempted by remember(initial) { mutableStateOf(false) }
+    var validationNonce by remember(initial) { mutableIntStateOf(0) }
+    val scrollState = rememberScrollState()
     val showByDefault = LocalVaultDisplayOptions.current.showPasswordsByDefault
     var passwordVisible by rememberSaveable { mutableStateOf(showByDefault) }
     var categoryExpanded by remember { mutableStateOf(false) }
@@ -101,9 +105,14 @@ fun EntryEditorDialog(
         (categories + draft.category).filter { it.isNotBlank() }.distinct()
     }
 
-    val trySave = {
+    val trySave = trySave@{
+        if (isSaving) return@trySave
         saveAttempted = true
-        if (!isSaving && draft.validate().isEmpty()) onSave(draft.normalized())
+        if (draft.validate().isEmpty()) onSave(draft.normalized()) else validationNonce++
+    }
+
+    LaunchedEffect(validationNonce) {
+        if (validationNonce > 0) scrollState.scrollTo(0)
     }
 
     Dialog(
@@ -139,10 +148,29 @@ fun EntryEditorDialog(
                     .fillMaxSize()
                     .padding(padding)
                     .imePadding()
-                    .verticalScroll(rememberScrollState())
+                    .verticalScroll(scrollState)
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
+                if (errors.isNotEmpty()) {
+                    Column(
+                        Modifier.fillMaxWidth().testTag(VaultTestTags.EDITOR_ERROR_SUMMARY),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Text(
+                            "Fix these before saving",
+                            style = MaterialTheme.typography.titleSmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                        errors.values.forEach { message ->
+                            Text(
+                                message,
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.error,
+                            )
+                        }
+                    }
+                }
                 val titleError = errors[DraftField.TITLE]
                 OutlinedTextField(
                     enabled = !isSaving,
@@ -248,6 +276,10 @@ fun EntryEditorDialog(
                             .testTag(VaultTestTags.EDITOR_CATEGORY),
                         label = { Text("Category") },
                         singleLine = true,
+                        isError = errors[DraftField.CATEGORY] != null,
+                        supportingText = errors[DraftField.CATEGORY]?.let { msg ->
+                            { Text(msg, modifier = Modifier.testTag(VaultTestTags.EDITOR_ERROR_CATEGORY)) }
+                        },
                         trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = categoryExpanded) },
                     )
                     ExposedDropdownMenu(

@@ -108,7 +108,7 @@ class VaultViewModelTest {
     @Test fun addNewEntry() = runTest {
         val vm = vm()
         var saved = 0
-        vm.save(EntryDraft(title = " New ", password = "pw", category = ""), onSaved = { saved++ })
+        vm.save(EntryDraft(title = " New ", password = "pw", notes = "n", category = ""), onSaved = { saved++ })
         val added = repo.addCalls.single()
         assertEquals("new-1", added.id)
         assertEquals("New", added.title)
@@ -125,7 +125,7 @@ class VaultViewModelTest {
     @Test fun editExistingEntry() = runTest {
         val vm = vm()
         var saved = false
-        vm.save(EntryDraft(id = "c", title = "Club 2", password = "x"), onSaved = { saved = true })
+        vm.save(EntryDraft(id = "c", title = "Club 2", password = "x", notes = "golf"), onSaved = { saved = true })
         val updated = repo.updateCalls.single()
         assertEquals("c", updated.id)
         assertEquals("Club 2", updated.title)
@@ -152,10 +152,10 @@ class VaultViewModelTest {
         repo.failAdd = true
         repo.failUpdate = true
         var saved = false
-        vm.save(EntryDraft(title = "T", password = "p"), onSaved = { saved = true })
+        vm.save(EntryDraft(title = "T", password = "p", notes = "n"), onSaved = { saved = true })
         assertEquals("Couldn't save entry", vm.uiState.value.userMessage)
         vm.onUserMessageShown()
-        vm.save(EntryDraft(id = "c", title = "T", password = "p"), onSaved = { saved = true })
+        vm.save(EntryDraft(id = "c", title = "T", password = "p", notes = "n"), onSaved = { saved = true })
         assertEquals("Couldn't save entry", vm.uiState.value.userMessage)
         assertFalse(saved)
     }
@@ -187,7 +187,7 @@ class VaultViewModelTest {
         val gate = CompletableDeferred<Unit>()
         repo.addGate = gate
         val vm = vm()
-        val draft = EntryDraft(title = "Pending", password = "secret")
+        val draft = EntryDraft(title = "Pending", password = "secret", notes = "n")
         var saved = 0
         vm.save(draft) { saved++ }
         assertTrue(vm.uiState.value.isSaving)
@@ -201,7 +201,7 @@ class VaultViewModelTest {
 
     @Test fun failedSaveAndCancellationAllowRetry() = runTest {
         val vm = vm()
-        val draft = EntryDraft(title = "Retry", password = "secret")
+        val draft = EntryDraft(title = "Retry", password = "secret", notes = "n")
         repo.failAdd = true
         vm.save(draft)
         assertFalse(vm.uiState.value.isSaving)

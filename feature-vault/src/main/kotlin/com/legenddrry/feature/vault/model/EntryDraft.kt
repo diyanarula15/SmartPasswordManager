@@ -32,7 +32,10 @@ fun EntryDraft.validate(): Map<DraftField, String> {
     }
     if (n.website.isNotEmpty() && !isValidWebsite(n.website)) errors[DraftField.WEBSITE] = "Enter a valid website"
     if (n.password.isBlank()) errors[DraftField.PASSWORD] = "Password is required"
-    if (n.notes.length > NOTES_MAX_LENGTH) errors[DraftField.NOTES] = "Notes are too long (max $NOTES_MAX_LENGTH)"
+    when {
+        n.notes.isBlank() -> errors[DraftField.NOTES] = "Notes are required"
+        n.notes.length > NOTES_MAX_LENGTH -> errors[DraftField.NOTES] = "Notes are too long (max $NOTES_MAX_LENGTH)"
+    }
     if (n.category.isBlank()) errors[DraftField.CATEGORY] = "Category is required"
     return errors
 }

@@ -192,6 +192,7 @@ class MainAppFlowTest : E2eTestBase() {
         compose.click(VaultTestTags.GENERATOR_SAVE)
         compose.awaitTag(VaultTestTags.EDITOR)
         compose.typeInto(VaultTestTags.EDITOR_TITLE, GENERATED_TITLE)
+        compose.typeInto(VaultTestTags.EDITOR_NOTES, "Generated account")
         compose.click(VaultTestTags.EDITOR_SAVE)
         compose.awaitTagGone(VaultTestTags.EDITOR)
         compose.await("generated entry to be saved in the shared repository") {

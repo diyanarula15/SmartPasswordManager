@@ -42,7 +42,7 @@ class EntriesRouteTest {
     @get:Rule
     val rule = createComposeRule()
 
-    private val github = testEntry("e1", "GitHub", username = "octo", password = "Gh-Secret-123!", category = "Work")
+    private val github = testEntry("e1", "GitHub", username = "octo", password = "Gh-Secret-123!", category = "Work", notes = "Work login")
     private val gmail = testEntry("e2", "Gmail", username = "me@gmail.com", password = "Mail-Pass-456?", category = "Email")
     private val outlook = testEntry("e3", "Outlook", username = "me@outlook.com", password = "Outl00k-Pass#9", category = "Email")
     private val seeded = listOf(github, gmail, outlook)
@@ -114,6 +114,7 @@ class EntriesRouteTest {
         rule.node(T.EDITOR_TITLE).performTextInput("Netflix")
         rule.node(T.EDITOR_USERNAME).performTextInput("binge@example.com")
         rule.node(T.EDITOR_PASSWORD).performTextInput("Str3am-All-Night!")
+        rule.node(T.EDITOR_NOTES).performTextInput("Streaming account")
         rule.click(T.EDITOR_SAVE)
 
         rule.await("repository.add to be called") { repo.addCalls.size == 1 }
