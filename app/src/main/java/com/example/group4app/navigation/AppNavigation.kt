@@ -15,6 +15,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -33,6 +34,8 @@ import com.example.group4app.ui.shell.MainShell
 import com.example.group4app.ui.theme.SmartPasswordManagerTheme
 import com.legenddrry.core.auth.AuthState
 import com.legenddrry.feature.tools.ProvideTools
+import com.legenddrry.feature.vault.LocalVaultDisplayOptions
+import com.legenddrry.feature.vault.VaultDisplayOptions
 import com.legenddrry.feature.tools.contracts.ThemeMode
 
 /**
@@ -67,7 +70,11 @@ fun LegenDDRRYApp(container: AppContainer) {
                     AuthState.LOADING -> AuthLoading()
                     AuthState.NEEDS_SETUP -> SetupScreen(container.auth)
                     AuthState.LOCKED -> UnlockScreen(container.auth)
-                    AuthState.UNLOCKED -> SessionViewModelScope(session) { MainShell(container) }
+                    AuthState.UNLOCKED -> SessionViewModelScope(session) {
+                        CompositionLocalProvider(
+                            LocalVaultDisplayOptions provides VaultDisplayOptions(preferences.showPasswords),
+                        ) { MainShell(container) }
+                    }
                 }
             }
         }
