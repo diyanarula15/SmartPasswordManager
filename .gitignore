@@ -3,3 +3,7 @@ build/
 .kotlin/
 *.iml
 .idea/
+.claude/
+feature-tools/
+artifacts/
+verification/

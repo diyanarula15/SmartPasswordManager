@@ -1,0 +1,69 @@
+# feature-vault — Password Vault + Password Generator (Developer 2)
+
+Android library module, Kotlin + Jetpack Compose Material 3, `minSdk 26`, `compileSdk 35`.
+Namespace / package: `com.legenddrry.feature.vault`.
+
+## Public API (frozen)
+
+```kotlin
+package com.legenddrry.feature.vault
+
+@Composable fun EntriesRoute(repository: VaultRepository)
+@Composable fun GenerateRoute(repository: VaultRepository)
+```
+
+Both take Developer 1's `com.legenddrry.core.VaultRepository`. Every create/update/delete goes
+through that interface. The module stores nothing itself: no database, no files, no prefs, no logging
+of secrets. Encryption is up to the core implementation.
+
+## Integration steps (Developer 1's project)
+
+1. Copy the `feature-vault/` folder to the project root.
+2. In the root `settings.gradle.kts`, add:
+   ```kotlin
+   include(":feature-vault")
+   ```
+3. Make sure the root `build.gradle.kts` declares these plugins (versions as in your project):
+   `com.android.library`, `org.jetbrains.kotlin.android`, `org.jetbrains.kotlin.plugin.compose`.
+   Built and tested with AGP 8.7.3, Kotlin 2.0.21 and Gradle 8.10.2.
+4. `feature-vault/build.gradle.kts` depends on `implementation(project(":core"))`. If your core
+   module has a different Gradle path, change only that line.
+5. In `:app`, add `implementation(project(":feature-vault"))` and call the routes from your
+   navigation:
+   ```kotlin
+   composable("entries") { EntriesRoute(repository = vaultRepository) }
+   composable("generate") { GenerateRoute(repository = vaultRepository) }
+   ```
+   Pass the same `VaultRepository` instance to both routes, so a password saved from the
+   generator shows up in the vault list.
+6. The routes don't apply a theme. They use `MaterialTheme` colours from the host app, which works
+   in both light and dark mode. They also don't draw a global bottom bar. Navigation inside the
+   module (detail, editor, confirmations) uses internal state, dialogs and sheets.
+
+Each route keeps its ViewModel (`VaultViewModel` / `GeneratorViewModel`) under a fixed key in the
+nearest `ViewModelStoreOwner`. With Navigation Compose that owner is the back-stack entry.
+
+## Dependencies the module adds
+Compose BOM 2024.12.01 (ui, material3, material-icons-extended, ui-tooling-preview),
+lifecycle-viewmodel-compose and lifecycle-runtime-compose 2.8.7, kotlinx-coroutines-android 1.8.1.
+For tests: junit 4.13.2, kotlinx-coroutines-test 1.8.1, compose ui-test-junit4, androidx.test runner and ext-junit.
+
+## Features
+- **Vault:** list, search (title / website / username / notes / category), category filter chips,
+  add, edit, delete with confirmation, detail view, show/hide password, copy username/password
+  (the clip is marked sensitive on Android 13+), strength indicator, duplicate-password warning
+  (badge in the list, card in the detail view, inline in the editor), loading / empty / no-results /
+  error + retry states, and form validation.
+- **Generator:** `SecureRandom`, length 12–32, upper/lower/digits/symbols toggles, every enabled
+  category guaranteed to appear (one character from each, then a Fisher–Yates shuffle), regenerate,
+  copy, strength meter, and save as a new vault entry through the shared editor.
+
+## Tests
+- JVM unit tests: `./gradlew :feature-vault:testDebugUnitTest` cover the generator, the strength
+  evaluator, validation, filtering and duplicates, and both ViewModels against an in-memory fake
+  repository.
+- Instrumented Compose UI tests: `./gradlew :feature-vault:connectedDebugAndroidTest` cover the
+  end-to-end flows on a device or emulator against an in-memory fake repository.
+
+The fake repositories exist only in the test source sets. They are plain in-memory lists that are
+neither encrypted nor persisted.
