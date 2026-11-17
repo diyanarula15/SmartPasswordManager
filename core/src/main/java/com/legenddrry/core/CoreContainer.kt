@@ -3,56 +3,31 @@ package com.legenddrry.core
 
 import android.content.Context
 import com.legenddrry.core.auth.AuthManager
-import com.legenddrry.core.auth.AuthResult
-import com.legenddrry.core.auth.AuthState
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.update
+import com.legenddrry.core.crypto.AndroidKeystoreKeyWrapper
+import com.legenddrry.core.vault.EncryptedVault
+import java.io.File
 
 /**
- * Application-scoped core services. Create ONCE (Application.onCreate).
- * [vaultRepository] emits an empty list while locked and throws IllegalStateException
- * from add/update/delete while locked.
+ * Application-scoped core services. Create ONCE (Application.onCreate) and share the instances.
+ *
+ * [auth] starts in LOADING and moves to NEEDS_SETUP or LOCKED on its own (background IO, a
+ * single file-existence check). [vaultRepository] emits an empty list while not UNLOCKED and
+ * throws IllegalStateException("Vault is locked") from add/update/delete while locked.
+ *
+ * Storage: `noBackupFilesDir/legenddrry/` (excluded from cloud backup; the metadata is also bound
+ * to this device's Android Keystore, so a copied vault cannot be opened elsewhere).
  */
 class CoreContainer private constructor(
     val auth: AuthManager,
     val vaultRepository: VaultRepository,
 ) {
     companion object {
+        private const val DIR_NAME = "legenddrry"
+
         fun create(context: Context): CoreContainer {
-            // SKELETON STUB (in-memory, NOT encrypted, NOT persisted). Replaced by the core worker.
-            val auth = StubAuth()
-            return CoreContainer(auth, StubVault(auth))
+            val dir = File(context.applicationContext.noBackupFilesDir, DIR_NAME)
+            val vault = EncryptedVault(dir, AndroidKeystoreKeyWrapper())
+            return CoreContainer(vault, vault)
         }
     }
-}
-
-private class StubAuth : AuthManager {
-    private var secret: String? = null
-    private val _state = MutableStateFlow(AuthState.NEEDS_SETUP)
-    override val state: StateFlow<AuthState> = _state.asStateFlow()
-    override suspend fun setUp(masterPassword: CharArray): AuthResult {
-        if (secret != null) return AuthResult.ALREADY_SET_UP
-        if (masterPassword.size < AuthManager.MIN_MASTER_PASSWORD_LENGTH) return AuthResult.PASSWORD_TOO_SHORT
-        secret = String(masterPassword); _state.value = AuthState.UNLOCKED; return AuthResult.SUCCESS
-    }
-    override suspend fun unlock(masterPassword: CharArray): AuthResult {
-        val s = secret ?: return AuthResult.NOT_SET_UP
-        if (s != String(masterPassword)) return AuthResult.WRONG_PASSWORD
-        _state.value = AuthState.UNLOCKED; return AuthResult.SUCCESS
-    }
-    override fun lock() { if (secret != null) _state.value = AuthState.LOCKED }
-}
-
-private class StubVault(private val auth: StubAuth) : VaultRepository {
-    private val data = MutableStateFlow<List<VaultEntry>>(emptyList())
-    override val entries: Flow<List<VaultEntry>> =
-        combine(auth.state, data) { s, list -> if (s == AuthState.UNLOCKED) list else emptyList() }
-    private fun check() = check(auth.state.value == AuthState.UNLOCKED) { "Vault is locked" }
-    override suspend fun add(entry: VaultEntry) { check(); data.update { it + entry } }
-    override suspend fun update(entry: VaultEntry) { check(); data.update { l -> l.map { if (it.id == entry.id) entry else it } } }
-    override suspend fun delete(id: String) { check(); data.update { l -> l.filterNot { it.id == id } } }
 }
