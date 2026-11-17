@@ -65,6 +65,7 @@ internal class EncryptedVault internal constructor(
     private var dek: ByteArray? = null
     private var cache: List<VaultEntry> = emptyList()
     private var generation = 0L
+    private var lockGeneration = 0L
 
     // Guarded by mutex (writes); volatile for lockoutRemainingSeconds().
     private var consecutiveFailures = 0
@@ -93,6 +94,7 @@ internal class EncryptedVault internal constructor(
     // ---------------------------------------------------------------- AuthManager
 
     override suspend fun setUp(masterPassword: CharArray): AuthResult = mutex.withLock {
+        val expectedGeneration = synchronized(sessionLock) { generation }
         if (masterPassword.size < AuthManager.MIN_MASTER_PASSWORD_LENGTH ||
             masterPassword.all { it.isWhitespace() }
         ) {
@@ -143,12 +145,12 @@ internal class EncryptedVault internal constructor(
 
         consecutiveFailures = 0
         lockoutUntilMs = 0L
-        openSession(newDek, emptyList())
-        AuthResult.SUCCESS
+        if (openSession(newDek, emptyList(), expectedGeneration)) AuthResult.SUCCESS else AuthResult.ERROR
     }
 
     override suspend fun unlock(masterPassword: CharArray): AuthResult = mutex.withLock {
         if (lockoutRemainingMs() > 0) return AuthResult.TOO_MANY_ATTEMPTS
+        val expectedGeneration = synchronized(sessionLock) { generation }
 
         val meta = try {
             withContext(ioDispatcher) {
@@ -164,46 +166,50 @@ internal class EncryptedVault internal constructor(
             return AuthResult.NOT_SET_UP
         }
 
-        val unwrapped: ByteArray? = try {
-            withContext(cpuDispatcher) {
-                val kek = VaultCrypto.deriveKek(masterPassword, meta.salt, meta.iterations)
-                try {
-                    VaultCrypto.decrypt(kek, meta.dekIv, meta.wrappedDek, 0, meta.wrappedDek.size, meta.dekAad())
-                } catch (_: BadPaddingException) {
-                    null // GCM tag mismatch: wrong master password.
-                } finally {
-                    kek.wipe()
+        // Capture the key inside the dispatcher block: prompt cancellation can discard a
+        // withContext return value, so a key returned only as its result could escape wiping.
+        var unwrapped: ByteArray? = null
+        var sessionOwnsKey = false
+        try {
+            try {
+                withContext(cpuDispatcher) {
+                    val kek = VaultCrypto.deriveKek(masterPassword, meta.salt, meta.iterations)
+                    try {
+                        unwrapped = VaultCrypto.decrypt(kek, meta.dekIv, meta.wrappedDek, 0, meta.wrappedDek.size, meta.dekAad())
+                    } catch (_: BadPaddingException) {
+                        // GCM tag mismatch: wrong master password.
+                    } finally {
+                        kek.wipe()
+                    }
                 }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return AuthResult.ERROR
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            return AuthResult.ERROR
-        }
 
-        if (unwrapped == null) {
-            registerFailure()
-            return AuthResult.WRONG_PASSWORD
-        }
-        if (unwrapped.size != VaultCrypto.KEY_BYTES) {
-            unwrapped.wipe()
-            return AuthResult.ERROR
-        }
+            val key = unwrapped
+            if (key == null) {
+                registerFailure()
+                return AuthResult.WRONG_PASSWORD
+            }
+            if (key.size != VaultCrypto.KEY_BYTES) return AuthResult.ERROR
 
-        val loaded = try {
-            withContext(ioDispatcher) { files.readVault(unwrapped) }
-        } catch (e: CancellationException) {
-            unwrapped.wipe()
-            throw e
-        } catch (_: Exception) {
-            unwrapped.wipe()
-            return AuthResult.ERROR // corrupt/missing data file: never reset, never unlock.
-        }
+            val loaded = try {
+                withContext(ioDispatcher) { files.readVault(key) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return AuthResult.ERROR // corrupt/missing data file: never reset, never unlock.
+            }
 
-        consecutiveFailures = 0
-        lockoutUntilMs = 0L
-        openSession(unwrapped, loaded)
-        AuthResult.SUCCESS
+            consecutiveFailures = 0
+            lockoutUntilMs = 0L
+            sessionOwnsKey = openSession(key, loaded, expectedGeneration)
+            if (sessionOwnsKey) AuthResult.SUCCESS else AuthResult.ERROR
+        } finally {
+            if (!sessionOwnsKey) unwrapped.wipe()
+        }
     }
 
     override fun lock() {
@@ -212,10 +218,14 @@ internal class EncryptedVault internal constructor(
             dek = null
             cache = emptyList()
             generation++
+            lockGeneration++
             _entries.tryEmit(emptyList())
             _state.compareAndSet(AuthState.UNLOCKED, AuthState.LOCKED)
         }
     }
+
+    /** Stable across password reauthentication; changes on every explicit lock request. */
+    internal fun transferSessionGeneration(): Long = synchronized(sessionLock) { lockGeneration }
 
     override fun lockoutRemainingSeconds(): Int {
         val ms = lockoutRemainingMs()
@@ -235,14 +245,22 @@ internal class EncryptedVault internal constructor(
         }
     }
 
-    private fun openSession(newDek: ByteArray, loaded: List<VaultEntry>) {
+    private fun openSession(newDek: ByteArray, loaded: List<VaultEntry>, expectedGeneration: Long): Boolean {
         synchronized(sessionLock) {
+            // A lock request takes precedence over authentication already in flight.
+            if (generation != expectedGeneration) {
+                newDek.wipe()
+                _state.compareAndSet(AuthState.LOADING, AuthState.LOCKED)
+                _state.compareAndSet(AuthState.NEEDS_SETUP, AuthState.LOCKED)
+                return false
+            }
             if (dek !== newDek) dek.wipe()
             dek = newDek
             cache = loaded
             generation++
             _entries.tryEmit(loaded)
             _state.value = AuthState.UNLOCKED
+            return true
         }
     }
 
@@ -301,14 +319,17 @@ internal class EncryptedVault internal constructor(
     /** [transform] returns the new list, or null for a no-op. */
     private suspend fun mutate(guardSessionForCommit: Boolean = false, expectedSessionGeneration: Long? = null, transform: (List<VaultEntry>) -> List<VaultEntry>?) {
         currentCoroutineContext().ensureActive()
-        checkUnlocked()
+        val requestedGeneration = synchronized(sessionLock) {
+            check(dek != null) { "Vault is locked" }
+            expectedSessionGeneration ?: generation
+        }
         mutex.withLock {
             var gen: Long
             var key: ByteArray
             var current: List<VaultEntry>
             synchronized(sessionLock) {
                 val d = dek ?: throw IllegalStateException("Vault is locked")
-                if (expectedSessionGeneration != null) check(generation == expectedSessionGeneration) { "Vault is locked" }
+                check(generation == requestedGeneration) { "Vault is locked" }
                 gen = generation
                 key = d.copyOf() // private copy: lock() may wipe the session key concurrently.
                 current = cache
@@ -352,10 +373,6 @@ internal class EncryptedVault internal constructor(
                 key.wipe()
             }
         }
-    }
-
-    private fun checkUnlocked() {
-        synchronized(sessionLock) { check(dek != null) { "Vault is locked" } }
     }
 
     companion object {

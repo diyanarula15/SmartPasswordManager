@@ -38,6 +38,7 @@ data class VaultUiState(
     val duplicatePasswordIds: Set<String> = emptySet(),
     /** One-shot snackbar text; UI calls onUserMessageShown() after showing it. */
     val userMessage: String? = null,
+    val isSaving: Boolean = false,
 )
 
 class VaultViewModel(
@@ -96,29 +97,35 @@ class VaultViewModel(
 
     /** Validates; adds when draft.id == null, else updates. Calls [onSaved] only on success. */
     fun save(draft: EntryDraft, onSaved: () -> Unit = {}) {
+        if (_uiState.value.isSaving) return
         val errors = draft.validate()
         if (errors.isNotEmpty()) {
             _uiState.update { it.copy(userMessage = errors.values.first()) }
             return
         }
+        _uiState.update { it.copy(isSaving = true) }
         viewModelScope.launch {
-            val ok = try {
-                if (draft.id == null) {
-                    repository.add(draft.toEntry(newId(), clock()))
-                } else {
-                    repository.update(draft.toEntry(draft.id, clock()))
+            try {
+                val ok = try {
+                    if (draft.id == null) {
+                        repository.add(draft.toEntry(newId(), clock()))
+                    } else {
+                        repository.update(draft.toEntry(draft.id, clock()))
+                    }
+                    true
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    false
                 }
-                true
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                false
-            }
-            if (ok) {
-                _uiState.update { it.copy(userMessage = VaultTestTags.MSG_ENTRY_SAVED) }
-                onSaved()
-            } else {
-                _uiState.update { it.copy(userMessage = MSG_SAVE_FAILED) }
+                if (ok) {
+                    _uiState.update { it.copy(userMessage = VaultTestTags.MSG_ENTRY_SAVED) }
+                    onSaved()
+                } else {
+                    _uiState.update { it.copy(userMessage = MSG_SAVE_FAILED) }
+                }
+            } finally {
+                _uiState.update { it.copy(isSaving = false) }
             }
         }
     }

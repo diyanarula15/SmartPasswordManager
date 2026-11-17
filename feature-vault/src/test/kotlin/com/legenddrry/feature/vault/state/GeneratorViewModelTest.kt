@@ -5,6 +5,8 @@ import com.legenddrry.feature.vault.model.EntryDraft
 import com.legenddrry.feature.vault.testing.FakeVaultRepository
 import com.legenddrry.feature.vault.testing.entry
 import com.legenddrry.feature.vault.ui.common.VaultTestTags
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -123,4 +125,39 @@ class GeneratorViewModelTest {
         assertEquals("Couldn't save entry", vm.uiState.value.userMessage)
         assertFalse(saved)
     }
+
+    @Test fun repeatedSaveWhileWriteIsPendingCreatesOnlyOneEntry() = runTest {
+        val gate = CompletableDeferred<Unit>()
+        repo.addGate = gate
+        val vm = vm()
+        val draft = EntryDraft(title = "Pending", password = "secret")
+        var saved = 0
+        vm.saveAsEntry(draft) { saved++ }
+        assertTrue(vm.uiState.value.isSaving)
+        vm.saveAsEntry(draft) { saved++ }
+        assertEquals(1, repo.addCalls.size)
+        gate.complete(Unit)
+        assertEquals(1, saved)
+        assertFalse(vm.uiState.value.isSaving)
+        assertEquals(1, repo.state.value.count { it.title == "Pending" })
+    }
+
+    @Test fun failedSaveAndCancellationAllowRetry() = runTest {
+        val vm = vm()
+        val draft = EntryDraft(title = "Retry", password = "secret")
+        repo.failAdd = true
+        vm.saveAsEntry(draft)
+        assertFalse(vm.uiState.value.isSaving)
+        repo.failAdd = false
+        repo.addError = CancellationException("cancelled write")
+        vm.saveAsEntry(draft)
+        assertFalse(vm.uiState.value.isSaving)
+        repo.addError = null
+        var saved = false
+        vm.saveAsEntry(draft) { saved = true }
+        assertTrue(saved)
+        assertFalse(vm.uiState.value.isSaving)
+        assertEquals(1, repo.state.value.count { it.title == "Retry" })
+    }
+
 }

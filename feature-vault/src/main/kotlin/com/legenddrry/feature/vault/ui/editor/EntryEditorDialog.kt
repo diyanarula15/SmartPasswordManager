@@ -81,6 +81,7 @@ fun EntryEditorDialog(
     // Standalone callers keep the original local-state behavior.
     draftOverride: EntryDraft? = null,
     onDraftChange: ((EntryDraft) -> Unit)? = null,
+    isSaving: Boolean = false,
 ) {
     var localDraft by remember(initial) { mutableStateOf(initial) }
     val draft = draftOverride ?: localDraft
@@ -102,11 +103,11 @@ fun EntryEditorDialog(
 
     val trySave = {
         saveAttempted = true
-        if (draft.validate().isEmpty()) onSave(draft.normalized())
+        if (!isSaving && draft.validate().isEmpty()) onSave(draft.normalized())
     }
 
     Dialog(
-        onDismissRequest = onDismiss,
+        onDismissRequest = { if (!isSaving) onDismiss() },
         properties = DialogProperties(usePlatformDefaultWidth = false),
     ) {
         // Let the dialog window resize above the keyboard.
@@ -121,13 +122,13 @@ fun EntryEditorDialog(
                     windowInsets = WindowInsets(0),
                     title = { Text(dialogTitle) },
                     navigationIcon = {
-                        IconButton(onClick = onDismiss, modifier = Modifier.testTag(VaultTestTags.EDITOR_CANCEL)) {
+                        IconButton(onClick = onDismiss, enabled = !isSaving, modifier = Modifier.testTag(VaultTestTags.EDITOR_CANCEL)) {
                             Icon(Icons.Outlined.Close, contentDescription = "Cancel")
                         }
                     },
                     actions = {
-                        TextButton(onClick = trySave, modifier = Modifier.testTag(VaultTestTags.EDITOR_SAVE)) {
-                            Text("Save")
+                        TextButton(onClick = trySave, enabled = !isSaving, modifier = Modifier.testTag(VaultTestTags.EDITOR_SAVE)) {
+                            Text(if (isSaving) "Saving…" else "Save")
                         }
                     },
                 )
@@ -144,6 +145,7 @@ fun EntryEditorDialog(
             ) {
                 val titleError = errors[DraftField.TITLE]
                 OutlinedTextField(
+                    enabled = !isSaving,
                     value = draft.title,
                     onValueChange = { updateDraft(draft.copy(title = it)) },
                     modifier = Modifier.fillMaxWidth().testTag(VaultTestTags.EDITOR_TITLE),
@@ -158,16 +160,23 @@ fun EntryEditorDialog(
                         imeAction = ImeAction.Next,
                     ),
                 )
+                val websiteError = errors[DraftField.WEBSITE]
                 OutlinedTextField(
+                    enabled = !isSaving,
                     value = draft.website,
                     onValueChange = { updateDraft(draft.copy(website = it)) },
                     modifier = Modifier.fillMaxWidth().testTag(VaultTestTags.EDITOR_WEBSITE),
                     label = { Text("Website") },
+                    isError = websiteError != null,
+                    supportingText = websiteError?.let { msg ->
+                        { Text(msg, modifier = Modifier.testTag(VaultTestTags.EDITOR_ERROR_WEBSITE)) }
+                    },
                     placeholder = { Text("example.com") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
                 )
                 OutlinedTextField(
+                    enabled = !isSaving,
                     value = draft.username,
                     onValueChange = { updateDraft(draft.copy(username = it)) },
                     modifier = Modifier.fillMaxWidth().testTag(VaultTestTags.EDITOR_USERNAME),
@@ -178,6 +187,7 @@ fun EntryEditorDialog(
 
                 val passwordError = errors[DraftField.PASSWORD]
                 OutlinedTextField(
+                    enabled = !isSaving,
                     value = draft.password,
                     onValueChange = { updateDraft(draft.copy(password = it)) },
                     modifier = Modifier.fillMaxWidth().testTag(VaultTestTags.EDITOR_PASSWORD),
@@ -189,6 +199,7 @@ fun EntryEditorDialog(
                     trailingIcon = {
                         IconButton(
                             onClick = { passwordVisible = !passwordVisible },
+                            enabled = !isSaving,
                             modifier = Modifier.testTag(VaultTestTags.EDITOR_PASSWORD_TOGGLE),
                         ) {
                             Icon(
@@ -224,9 +235,10 @@ fun EntryEditorDialog(
 
                 ExposedDropdownMenuBox(
                     expanded = categoryExpanded,
-                    onExpandedChange = { categoryExpanded = it },
+                    onExpandedChange = { if (!isSaving) categoryExpanded = it },
                 ) {
                     OutlinedTextField(
+                        enabled = !isSaving,
                         value = draft.category,
                         onValueChange = {},
                         readOnly = true,
@@ -256,11 +268,17 @@ fun EntryEditorDialog(
                     }
                 }
 
+                val notesError = errors[DraftField.NOTES]
                 OutlinedTextField(
+                    enabled = !isSaving,
                     value = draft.notes,
                     onValueChange = { updateDraft(draft.copy(notes = it)) },
                     modifier = Modifier.fillMaxWidth().testTag(VaultTestTags.EDITOR_NOTES),
                     label = { Text("Notes") },
+                    isError = notesError != null,
+                    supportingText = notesError?.let { msg ->
+                        { Text(msg, modifier = Modifier.testTag(VaultTestTags.EDITOR_ERROR_NOTES)) }
+                    },
                     minLines = 3,
                     maxLines = 8,
                     keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),

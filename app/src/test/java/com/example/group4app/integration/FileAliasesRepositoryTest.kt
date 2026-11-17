@@ -1,6 +1,7 @@
 package com.example.group4app.integration
 
 import java.io.File
+import java.io.IOException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
@@ -160,4 +161,52 @@ class FileAliasesRepositoryTest {
         repo(nested).create("Svc")
         assertEquals(1, repo(nested).aliases.value.size)
     }
+    @Test
+    fun unsupportedOrMissingVersionIsPreservedBeforeAnyNewWrite() = runTest {
+        for (version in listOf("2", "\"1\"", "null")) {
+            val original = """{"version":$version,"aliases":[]}"""
+            file().writeText(original)
+            val r = repo()
+            assertTrue(r.aliases.value.isEmpty())
+            r.create("Fresh")
+            assertEquals(1, JSONObject(file().readText()).getInt("version"))
+            assertTrue(tmp.root.listFiles()!!.filter { it.name.contains(".corrupt") }
+                .any { it.readText() == original })
+        }
+        file().writeText("""{"aliases":[]}""")
+        assertTrue(repo().aliases.value.isEmpty())
+        assertFalse(file().exists())
+    }
+
+    @Test
+    fun repeatedCorruptionAtSameTimestampKeepsEveryRecoveryCopy() {
+        val originals = listOf("first invalid file", "second invalid file", "third invalid file", "fourth invalid file")
+        for (text in originals) {
+            file().writeText(text)
+            assertTrue(repo().aliases.value.isEmpty())
+        }
+        val recovered = tmp.root.listFiles()!!.filter { it.name.startsWith("aliases.json.corrupt") }
+        assertEquals(originals.toSet(), recovered.map { it.readText() }.toSet())
+        assertEquals(originals.size, recovered.size)
+    }
+
+    @Test
+    fun startupReadFailureBlocksWritesUntilRepositoryIsReopened() = runTest {
+        // A directory at the storage path deterministically makes the initial read fail.
+        assertTrue(file().mkdir())
+        val r = repo()
+        assertTrue(r.aliases.value.isEmpty())
+        assertTrue(file().delete())
+        try {
+            r.create("Must not replace unreadable data")
+            fail("An unreadable initial snapshot must block mutations")
+        } catch (_: IOException) {
+        }
+        assertFalse(file().exists())
+        assertTrue(r.aliases.value.isEmpty())
+        // An explicit reopen can safely load the now repaired storage path.
+        repo().create("Reopened")
+        assertEquals(1, repo().aliases.value.size)
+    }
+
 }

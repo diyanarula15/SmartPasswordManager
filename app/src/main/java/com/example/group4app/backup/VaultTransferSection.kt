@@ -52,6 +52,7 @@ fun VaultTransferSection(manager: VaultTransferManager) {
     val resolver = LocalContext.current.contentResolver
     val scope = rememberCoroutineScope()
     val buffers = remember(manager) { TransferBuffers() }
+    val picker = remember(manager) { TransferPickerState() }
     var dialog by remember { mutableStateOf(TransferDialog.NONE) }
     var method by remember { mutableStateOf(BackupUnlockMethod.TRANSFER_PASSWORD) }
     var importMethod by remember { mutableStateOf(BackupUnlockMethod.TRANSFER_PASSWORD) }
@@ -110,7 +111,8 @@ fun VaultTransferSection(manager: VaultTransferManager) {
                 super.createIntent(context, input).putExtra(android.content.Intent.EXTRA_LOCAL_ONLY, true)
         },
     ) { uri ->
-        val encrypted = buffers.pendingExport
+        val accepted = picker.complete()
+        val encrypted = if (accepted) buffers.pendingExport else null
         if (uri == null || encrypted == null) {
             buffers.pendingExport?.fill(0)
             buffers.pendingExport = null
@@ -160,7 +162,8 @@ fun VaultTransferSection(manager: VaultTransferManager) {
         override fun createIntent(context: android.content.Context, input: Array<String>): android.content.Intent =
             super.createIntent(context, input).putExtra(android.content.Intent.EXTRA_LOCAL_ONLY, true)
     }) { uri ->
-        if (uri == null) {
+        val accepted = picker.complete()
+        if (uri == null || !accepted) {
             busy = false
             message("Import cancelled. Your vault is unchanged.")
         } else {
@@ -214,8 +217,10 @@ fun VaultTransferSection(manager: VaultTransferManager) {
                 try {
                     busy = true
                     progress = "Choose an encrypted .vault file…"
+                    picker.started()
                     openDocument.launch(arrayOf("application/octet-stream", "application/x-vault", "*/*"))
                 } catch (_: Exception) {
+                    picker.complete()
                     busy = false
                     message("The file picker could not open. Please try again.", true)
                 }
@@ -223,7 +228,13 @@ fun VaultTransferSection(manager: VaultTransferManager) {
         }
         if (busy) TransferProgress(progress) {
             val running = operation
-            if (running?.isActive == true) {
+            if (picker.awaitingResult) {
+                picker.cancel()
+                buffers.clear()
+                clearSecrets()
+                dialog = TransferDialog.NONE
+                progress = "Transfer cancelled. Close the file picker to continue."
+            } else if (running?.isActive == true) {
                 progress = "Cancelling transfer…"
                 running.cancel()
                 clearSecrets()
@@ -265,6 +276,7 @@ fun VaultTransferSection(manager: VaultTransferManager) {
                                     dialog = TransferDialog.NONE
                                     progress = "Choose where to save your backup…"
                                     val date = DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss").withZone(ZoneId.systemDefault()).format(Instant.now())
+                                    picker.started()
                                     createDocument.launch("LegenDDRRY-$date.vault")
                                 } catch (_: CancellationException) {
                                     buffers.clear()
@@ -273,6 +285,7 @@ fun VaultTransferSection(manager: VaultTransferManager) {
                                     busy = false
                                     message("Export cancelled.")
                                 } catch (_: Exception) {
+                                    picker.complete()
                                     buffers.clear()
                                     busy = false
                                     message("Could not export. Check your master password and make sure the vault is unlocked.", true)

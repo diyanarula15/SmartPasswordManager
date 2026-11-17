@@ -1,6 +1,11 @@
 // Instrumented tests for EntriesRoute against the VaultTestTags contract.
 package com.legenddrry.feature.vault
 
+import android.content.Context
+import android.content.ContextWrapper
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.performTextInput
@@ -164,6 +169,32 @@ class EntriesRouteTest {
         assertTrue(rule.exists(T.EDITOR))
         assertTrue(repo.addCalls.isEmpty())
         assertTrue(repo.current.isEmpty())
+    }
+
+    @Test
+    fun invalidWebsite_showsInlineError_andDoesNotSave() {
+        val repo = launch(AndroidFakeVaultRepository())
+        rule.click(T.ADD_FAB)
+        rule.node(T.EDITOR_TITLE).performTextInput("Site")
+        rule.node(T.EDITOR_PASSWORD).performTextInput("secret")
+        rule.node(T.EDITOR_WEBSITE).performTextInput("bad website")
+        rule.click(T.EDITOR_SAVE)
+        rule.awaitTag(T.EDITOR_ERROR_WEBSITE)
+        assertTrue(rule.exists(T.EDITOR))
+        assertTrue(repo.addCalls.isEmpty())
+    }
+
+    @Test
+    fun overlongNotes_showsInlineError_andDoesNotSave() {
+        val repo = launch(AndroidFakeVaultRepository())
+        rule.click(T.ADD_FAB)
+        rule.node(T.EDITOR_TITLE).performTextInput("Site")
+        rule.node(T.EDITOR_PASSWORD).performTextInput("secret")
+        rule.node(T.EDITOR_NOTES).performTextInput("n".repeat(1001))
+        rule.click(T.EDITOR_SAVE)
+        rule.awaitTag(T.EDITOR_ERROR_NOTES)
+        assertTrue(rule.exists(T.EDITOR))
+        assertTrue(repo.addCalls.isEmpty())
     }
 
     @Test
@@ -334,6 +365,30 @@ class EntriesRouteTest {
         rule.click(T.DETAIL_COPY_PASSWORD)
         rule.awaitClipboard(github.password)
         rule.awaitText(T.MSG_PASSWORD_COPIED)
+    }
+
+    @Test
+    fun clipboardPolicyDenialShowsFailureAndKeepsDetailOpen() {
+        val repo = AndroidFakeVaultRepository(seeded)
+        rule.setContent {
+            val host = LocalContext.current
+            val denied = remember(host) {
+                object : ContextWrapper(host) {
+                    override fun getSystemService(name: String): Any? {
+                        if (name == Context.CLIPBOARD_SERVICE) throw SecurityException("Clipboard blocked by policy")
+                        return super.getSystemService(name)
+                    }
+                }
+            }
+            CompositionLocalProvider(LocalContext provides denied) {
+                MaterialTheme { EntriesRoute(repo) }
+            }
+        }
+        openDetail(github.id)
+        rule.click(T.DETAIL_COPY_PASSWORD)
+        rule.awaitText("Couldn't copy to clipboard. Please try again.")
+        assertTrue(rule.exists(T.DETAIL_SCREEN))
+        assertEquals(seeded, repo.current)
     }
 
     @Test

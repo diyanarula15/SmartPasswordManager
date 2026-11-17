@@ -144,7 +144,9 @@ object PasswordStrengthEvaluator {
      */
     private fun markSequences(pw: String, charBits: DoubleArray): Boolean {
         var found = false
-        val lower = pw.lowercase()
+        // Pattern offsets index the original UTF-16 array. Whole-string lowercase can
+        // expand characters (for example U+0130), which would shift those offsets.
+        val lower = String(CharArray(pw.length) { pw[it].lowercaseChar() })
 
         var run = 1
         var step = 0
@@ -179,7 +181,9 @@ object PasswordStrengthEvaluator {
 
     /** Common passwords (case-insensitive, also with simple leetspeak) become ~0 bits each char. */
     private fun markCommon(pw: String, charBits: DoubleArray): Int {
-        val lower = pw.lowercase()
+        // Pattern offsets index the original UTF-16 array. Whole-string lowercase can
+        // expand characters (for example U+0130), which would shift those offsets.
+        val lower = String(CharArray(pw.length) { pw[it].lowercaseChar() })
         val leet = String(CharArray(lower.length) { LEET[lower[it]] ?: lower[it] })
         val covered = BooleanArray(pw.length)
         var matches = 0

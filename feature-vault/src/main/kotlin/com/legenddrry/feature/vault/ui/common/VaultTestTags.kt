@@ -47,6 +47,8 @@ object VaultTestTags {
     const val EDITOR_SAVE = "editor_save"
     const val EDITOR_CANCEL = "editor_cancel"
     const val EDITOR_ERROR_TITLE = "editor_error_title"        // supporting text node shown when title invalid
+    const val EDITOR_ERROR_WEBSITE = "editor_error_website"
+    const val EDITOR_ERROR_NOTES = "editor_error_notes"
     const val EDITOR_ERROR_PASSWORD = "editor_error_password"  // supporting text node shown when password invalid
     const val EDITOR_DUPLICATE_WARNING = "editor_duplicate_warning"
 

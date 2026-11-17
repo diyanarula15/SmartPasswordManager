@@ -29,8 +29,8 @@ import org.json.JSONObject
  * File format (UTF-8):
  * `{"version":1,"aliases":[{"id","serviceName","aliasAddress","createdAtEpochMs","isActive"}]}`
  * newest first. Loaded synchronously at construction; a missing file yields an empty list, an
- * unreadable/invalid file is moved aside to `<name>.corrupt` (never silently deleted) and the
- * repository starts empty. Writes are atomic (temp file + rename) and mutations are serialized.
+ * invalid file is moved aside to a unique `<name>.corrupt` recovery file and the
+ * repository starts empty. Unreadable files, or failed recovery, block further writes. Writes are atomic (temp file + rename) and mutations are serialized.
  * A mutation only publishes its new list after the file write succeeded (IOException otherwise).
  */
 class FileAliasesRepository private constructor(
@@ -47,6 +47,7 @@ class FileAliasesRepository private constructor(
         this(file, clock, ioDispatcher)
 
     private val mutex = Mutex()
+    private var loadFailure: IOException? = null
     private val mutableAliases = MutableStateFlow(loadFromDisk())
     override val aliases: StateFlow<List<EmailAlias>> = mutableAliases.asStateFlow()
 
@@ -83,6 +84,8 @@ class FileAliasesRepository private constructor(
     /** Must be called with [mutex] held. Persists first, then publishes. */
     private suspend fun commit(updated: List<EmailAlias>) {
         withContext(ioDispatcher) {
+            // Never replace a file whose existing records we could not read or preserve.
+            loadFailure?.let { throw it }
             writeAtomically(encode(updated))
             // Publish before crossing the cancellable dispatcher boundary. A caller can leave
             // the screen after the atomic rename; the next mutation must see that durable state.
@@ -116,26 +119,37 @@ class FileAliasesRepository private constructor(
         if (!file.exists()) return emptyList()
         val text = try {
             file.readText(Charsets.UTF_8)
-        } catch (_: IOException) {
+        } catch (e: IOException) {
+            loadFailure = IOException("Could not read alias storage. Existing data was preserved.", e)
             return emptyList()
         }
         return try {
             decode(text)
         } catch (_: JSONException) {
-            preserveCorruptFile(); emptyList()
+            recoverCorruptFile(); emptyList()
         } catch (_: IllegalArgumentException) {
-            preserveCorruptFile(); emptyList()
+            recoverCorruptFile(); emptyList()
         }
     }
 
-    private fun preserveCorruptFile() {
+    private fun recoverCorruptFile() {
         val dir = file.absoluteFile.parentFile
-        var target = File(dir, file.name + CORRUPT_SUFFIX)
-        if (target.exists()) target = File(dir, file.name + CORRUPT_SUFFIX + "." + clock())
+        val baseName = file.name + CORRUPT_SUFFIX
+        var target = File(dir, baseName)
+        if (target.exists()) {
+            val timestampName = baseName + "." + clock()
+            target = File(dir, timestampName)
+            var suffix = 1
+            while (target.exists()) target = File(dir, timestampName + "." + suffix++)
+        }
         try {
-            Files.move(file.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING)
+            Files.move(file.toPath(), target.toPath())
         } catch (_: IOException) {
-            try { file.copyTo(target, overwrite = true) } catch (_: IOException) { /* best effort */ }
+            try {
+                file.copyTo(target, overwrite = false)
+            } catch (e: IOException) {
+                loadFailure = IOException("Could not preserve invalid alias storage. Existing data was preserved.", e)
+            }
         }
     }
 
@@ -169,6 +183,7 @@ class FileAliasesRepository private constructor(
         /** Throws JSONException / IllegalArgumentException for any invalid content. */
         fun decode(text: String): List<EmailAlias> {
             val root = JSONObject(text)
+            require(root.get("version") == FORMAT_VERSION) { "Unsupported alias storage version." }
             val array = root.getJSONArray("aliases")
             val result = ArrayList<EmailAlias>(array.length())
             for (i in 0 until array.length()) {
@@ -182,6 +197,7 @@ class FileAliasesRepository private constructor(
                 )
                 require(alias.id.isNotBlank()) { "Blank alias id." }
                 require(alias.aliasAddress.isNotBlank()) { "Blank alias address." }
+                require(serviceNameError(alias.serviceName) == null) { "Invalid alias service name." }
                 result += alias
             }
             require(result.map { it.id }.distinct().size == result.size) { "Duplicate alias ids." }

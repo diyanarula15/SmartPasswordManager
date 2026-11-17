@@ -44,6 +44,7 @@ import com.legenddrry.feature.vault.state.VaultViewModel
 import com.legenddrry.feature.vault.state.EditorDraftViewModel
 import com.legenddrry.feature.vault.ui.common.VaultTestTags
 import com.legenddrry.feature.vault.ui.common.copyToClipboard
+import com.legenddrry.feature.vault.ui.common.clipboardCopyMessage
 import com.legenddrry.feature.vault.ui.editor.EntryEditorDialog
 import com.legenddrry.feature.vault.ui.entries.EmptyVaultState
 import com.legenddrry.feature.vault.ui.entries.EntriesHeader
@@ -164,12 +165,14 @@ fun EntriesRoute(repository: VaultRepository) {
             onEdit = { editorVm.open(entry.toDraft()) },
             onDelete = { deleteTargetId = entry.id },
             onCopyUsername = {
-                copyToClipboard(context, "Username", entry.username, sensitive = false)
-                showMessage(VaultTestTags.MSG_USERNAME_COPIED)
+                showMessage(clipboardCopyMessage(VaultTestTags.MSG_USERNAME_COPIED) {
+                    copyToClipboard(context, "Username", entry.username, sensitive = false)
+                })
             },
             onCopyPassword = {
-                copyToClipboard(context, "Password", entry.password)
-                showMessage(VaultTestTags.MSG_PASSWORD_COPIED)
+                showMessage(clipboardCopyMessage(VaultTestTags.MSG_PASSWORD_COPIED) {
+                    copyToClipboard(context, "Password", entry.password)
+                })
             },
         )
     }
@@ -177,6 +180,7 @@ fun EntriesRoute(repository: VaultRepository) {
     editorState?.let { editor ->
         EntryEditorDialog(
             initial = editor.initial,
+            isSaving = state.isSaving,
             draftOverride = editor.draft,
             onDraftChange = editorVm::update,
             categories = state.categories,

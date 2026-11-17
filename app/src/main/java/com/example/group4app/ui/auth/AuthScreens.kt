@@ -71,6 +71,7 @@ import androidx.compose.ui.unit.dp
 import com.example.group4app.ui.shell.AppTestTags
 import com.legenddrry.core.auth.AuthManager
 import com.legenddrry.core.auth.AuthResult
+import com.legenddrry.core.transfer.VaultTransferLimits
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -105,8 +106,7 @@ fun SetupScreen(auth: AuthManager, modifier: Modifier = Modifier) {
         error = null
         focusManager.clearFocus()
         scope.launch {
-            val result = callAuth { auth.setUp(chars) }
-            chars.fill('\u0000')
+            val result = callAuth(chars) { auth.setUp(it) }
             working = false
             error = setupErrorMessage(result)
         }
@@ -190,8 +190,7 @@ fun UnlockScreen(auth: AuthManager, modifier: Modifier = Modifier) {
         working = true
         error = null
         scope.launch {
-            val result = callAuth { auth.unlock(chars) }
-            chars.fill('\u0000')
+            val result = callAuth(chars) { auth.unlock(it) }
             working = false
             when (result) {
                 AuthResult.SUCCESS -> Unit
@@ -251,6 +250,8 @@ internal fun validateNewMasterPassword(password: String, confirm: String): Strin
     password.length < AuthManager.MIN_MASTER_PASSWORD_LENGTH ->
         "Use at least ${AuthManager.MIN_MASTER_PASSWORD_LENGTH} characters."
     password.isBlank() -> "Your master password can't be only spaces."
+    password.length > VaultTransferLimits.MAX_PASSWORD_CHARS ->
+        "Use ${VaultTransferLimits.MAX_PASSWORD_CHARS} characters or fewer."
     password != confirm -> "The passwords don't match."
     else -> null
 }
@@ -279,12 +280,14 @@ private fun lockoutMessage(seconds: Int) =
 private fun safeLockout(auth: AuthManager): Int =
     runCatching { auth.lockoutRemainingSeconds() }.getOrDefault(0).coerceAtLeast(0)
 
-private suspend fun callAuth(block: suspend () -> AuthResult): AuthResult = try {
-    block()
+internal suspend fun callAuth(credential: CharArray, block: suspend (CharArray) -> AuthResult): AuthResult = try {
+    block(credential)
 } catch (e: CancellationException) {
     throw e
 } catch (e: Exception) {
     AuthResult.ERROR
+} finally {
+    credential.fill('\u0000')
 }
 
 // ---------------------------------------------------------------------------------------------

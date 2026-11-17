@@ -108,6 +108,19 @@ class PasswordStrengthEvaluatorTest {
     }
 
     @Test
+    fun unicodeCaseExpansionKeepsPatternOffsetsInBounds() {
+        // U+0130 lowercases to two code units with String.lowercase(). Pattern
+        // matching must keep offsets aligned with the original password.
+        for (password in listOf("İabc", "İpassword", "passwordİ", "İİİqwerty", "İİİpasswordİ123", "🔐İAbc123!")) {
+            val strength = PasswordStrengthEvaluator.evaluate(password)
+            assertTrue(strength.entropyBits.isFinite())
+            assertTrue(strength.entropyBits >= 0.0)
+        }
+        assertTrue(PasswordStrengthEvaluator.evaluate("İpassword").suggestions.contains(PasswordStrengthEvaluator.SUGGEST_COMMON))
+        assertTrue(PasswordStrengthEvaluator.evaluate("İabc").suggestions.contains(PasswordStrengthEvaluator.SUGGEST_SEQUENCES))
+    }
+
+    @Test
     fun fractionTracksLevel() {
         assertEquals(1.0f, PasswordStrengthEvaluator.evaluate("q7#Lm2!vZ9xR@k4P").fraction, 0.0001f)
     }

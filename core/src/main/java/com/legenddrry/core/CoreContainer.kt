@@ -29,7 +29,11 @@ class CoreContainer private constructor(
         fun create(context: Context): CoreContainer {
             val dir = File(context.applicationContext.noBackupFilesDir, DIR_NAME)
             val vault = EncryptedVault(dir, AndroidKeystoreKeyWrapper())
-            return CoreContainer(vault, vault, VaultTransferManager(vault, vault))
+            return CoreContainer(
+                vault,
+                vault,
+                VaultTransferManager(vault, vault, sessionGeneration = vault::transferSessionGeneration),
+            )
         }
     }
 }

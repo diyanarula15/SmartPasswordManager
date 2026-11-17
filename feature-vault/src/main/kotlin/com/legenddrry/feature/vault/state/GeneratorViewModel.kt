@@ -32,6 +32,7 @@ data class GeneratorUiState(
     val entries: List<VaultEntry> = emptyList(),
     /** One-shot snackbar text; UI calls onUserMessageShown() after showing it. */
     val userMessage: String? = null,
+    val isSaving: Boolean = false,
 )
 
 class GeneratorViewModel(
@@ -90,26 +91,32 @@ class GeneratorViewModel(
 
     /** Adds a NEW entry (draft.id ignored). Validates first; calls [onSaved] only on success. */
     fun saveAsEntry(draft: EntryDraft, onSaved: () -> Unit = {}) {
+        if (_uiState.value.isSaving) return
         val fresh = draft.copy(id = null)
         val errors = fresh.validate()
         if (errors.isNotEmpty()) {
             _uiState.update { it.copy(userMessage = errors.values.first()) }
             return
         }
+        _uiState.update { it.copy(isSaving = true) }
         viewModelScope.launch {
-            val ok = try {
-                repository.add(fresh.toEntry(newId(), clock()))
-                true
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                false
-            }
-            if (ok) {
-                _uiState.update { it.copy(userMessage = VaultTestTags.MSG_ENTRY_SAVED) }
-                onSaved()
-            } else {
-                _uiState.update { it.copy(userMessage = MSG_SAVE_FAILED) }
+            try {
+                val ok = try {
+                    repository.add(fresh.toEntry(newId(), clock()))
+                    true
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    false
+                }
+                if (ok) {
+                    _uiState.update { it.copy(userMessage = VaultTestTags.MSG_ENTRY_SAVED) }
+                    onSaved()
+                } else {
+                    _uiState.update { it.copy(userMessage = MSG_SAVE_FAILED) }
+                }
+            } finally {
+                _uiState.update { it.copy(isSaving = false) }
             }
         }
     }

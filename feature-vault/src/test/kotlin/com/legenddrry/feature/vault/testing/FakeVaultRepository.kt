@@ -20,6 +20,9 @@ class FakeVaultRepository(initial: List<VaultEntry> = emptyList()) : VaultReposi
     /** When non-null, collection suspends until it completes (simulates slow first load). */
     var entriesGate: CompletableDeferred<Unit>? = null
 
+    var addGate: CompletableDeferred<Unit>? = null
+    var addError: Throwable? = null
+
     var failAdd = false
     var failUpdate = false
     var failDelete = false
@@ -39,6 +42,8 @@ class FakeVaultRepository(initial: List<VaultEntry> = emptyList()) : VaultReposi
 
     override suspend fun add(entry: VaultEntry) {
         addCalls += entry
+        addGate?.await()
+        addError?.let { throw it }
         if (failAdd) throw IllegalStateException("add failed")
         state.update { it + entry }
     }

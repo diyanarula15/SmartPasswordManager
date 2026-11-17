@@ -1,0 +1,4 @@
+def auditOwner = System.getProperty('audit.owner', 'root')
+gradle.beforeProject { project ->
+    project.layout.buildDirectory.set(new File('/tmp/uss-audit-' + auditOwner + '/build', project.path == ':' ? 'root' : project.path.substring(1).replace(':', '/')))
+}

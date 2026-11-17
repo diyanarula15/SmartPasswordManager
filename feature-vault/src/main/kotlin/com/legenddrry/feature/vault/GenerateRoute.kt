@@ -24,6 +24,7 @@ import com.legenddrry.feature.vault.state.GeneratorViewModel
 import com.legenddrry.feature.vault.state.EditorDraftViewModel
 import com.legenddrry.feature.vault.ui.common.VaultTestTags
 import com.legenddrry.feature.vault.ui.common.copyToClipboard
+import com.legenddrry.feature.vault.ui.common.clipboardCopyMessage
 import com.legenddrry.feature.vault.ui.editor.EntryEditorDialog
 import com.legenddrry.feature.vault.ui.generator.GeneratorContent
 import kotlinx.coroutines.launch
@@ -61,10 +62,12 @@ fun GenerateRoute(repository: VaultRepository) {
             onOptionsChange = vm::updateOptions,
             onRegenerate = vm::regenerate,
             onCopy = {
-                copyToClipboard(context, "Password", state.password)
+                val message = clipboardCopyMessage(VaultTestTags.MSG_PASSWORD_COPIED) {
+                    copyToClipboard(context, "Password", state.password)
+                }
                 scope.launch {
                     snackbarHostState.currentSnackbarData?.dismiss()
-                    snackbarHostState.showSnackbar(VaultTestTags.MSG_PASSWORD_COPIED)
+                    snackbarHostState.showSnackbar(message)
                 }
             },
             onSave = { editorVm.open(EntryDraft(password = state.password)) },
@@ -76,6 +79,7 @@ fun GenerateRoute(repository: VaultRepository) {
         val close = editorVm::clear
         EntryEditorDialog(
             initial = editor.initial,
+            isSaving = state.isSaving,
             draftOverride = editor.draft,
             onDraftChange = editorVm::update,
             categories = state.categories,
