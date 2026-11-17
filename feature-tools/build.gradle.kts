@@ -26,7 +26,8 @@ android {
 }
 
 dependencies {
-    val composeBom = platform("androidx.compose:compose-bom:2024.12.01")
+    // Must match the app's Compose BOM; a lower BOM compiles against APIs that differ at runtime.
+    val composeBom = platform(libs.androidx.compose.bom)
     implementation(composeBom)
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.foundation:foundation")

@@ -17,4 +17,3 @@ local.properties
 # Module build outputs and local tooling
 build/
 .kotlin/
-.claude/

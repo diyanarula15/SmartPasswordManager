@@ -9,6 +9,8 @@ import com.legenddrry.core.VaultEntry
 import com.legenddrry.feature.tools.contracts.ApprovalStatus
 import com.legenddrry.feature.tools.contracts.ThemeMode
 import kotlinx.coroutines.runBlocking
+import androidx.compose.ui.test.onAllNodesWithTag
+import androidx.compose.ui.test.performSemanticsAction
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -150,11 +152,19 @@ class ToolsFlowTest : E2eTestBase() {
             compose.textOrNull(ToolTags.ALIASES_FEEDBACK)?.contains("copied", ignoreCase = true) == true
         }
 
-        // Disable / enable.
-        compose.click(ToolTags.aliasToggle(alias.id))
+        // Disable / enable. Toggle via the Switch's semantic click: after scroll-to, the switch can sit under the
+        // anchored "create alias" FAB, and a coordinate tap would hit the FAB instead.
+        toggleAlias(alias.id)
         compose.await("alias to be disabled") { repo.aliases.value.first { it.id == alias.id }.isActive.not() }
         compose.await("switch to show Off") { compose.toggleState(ToolTags.aliasToggle(alias.id)) == ToggleableState.Off }
-        compose.click(ToolTags.aliasToggle(alias.id))
+        // The switch stays disabled while the write is in flight (busy); wait until it accepts input again.
+        compose.await("switch to be enabled again") {
+            compose.onAllNodesWithTag(ToolTags.aliasToggle(alias.id), useUnmergedTree = true)
+                .fetchSemanticsNodes()
+                .firstOrNull()
+                ?.let { androidx.compose.ui.semantics.SemanticsProperties.Disabled !in it.config } == true
+        }
+        toggleAlias(alias.id)
         compose.await("alias to be enabled") { repo.aliases.value.first { it.id == alias.id }.isActive }
         compose.await("switch to show On") { compose.toggleState(ToolTags.aliasToggle(alias.id)) == ToggleableState.On }
 
@@ -208,5 +218,11 @@ class ToolsFlowTest : E2eTestBase() {
         assertEquals(ThemeMode.LIGHT, settings.preferences.value.themeMode)
         assertEquals(autoLock, settings.preferences.value.autoLockMinutes)
         assertEquals(clipboard, settings.preferences.value.clipboardClearSeconds)
+    }
+
+    private fun toggleAlias(id: String) {
+        compose.onAllNodesWithTag(ToolTags.aliasToggle(id), useUnmergedTree = true)[0]
+            .performSemanticsAction(androidx.compose.ui.semantics.SemanticsActions.OnClick)
+        compose.waitForIdle()
     }
 }
